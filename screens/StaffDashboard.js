@@ -32,7 +32,6 @@ const LABEL = "#354638";
 const MUTED = "#5F6B61";
 const FOOTER = "#9A9A8E";
 
-const SELLING_PRICE = 85;
 
 const money = value =>
   "R " +
@@ -232,13 +231,6 @@ export default function StaffDashboard({ navigation }) {
 
   const todaySales = sales.filter(item => item.saleDate === todayKey);
 
-  const todayRevenue = todaySales.reduce(
-    (sum, item) =>
-      sum +
-      Number(item.totalAmount ?? Number(item.quantity || 0) * SELLING_PRICE),
-    0
-  );
-
   const todayChickensSold = todaySales.reduce(
     (sum, item) => sum + Number(item.quantity || 0),
     0
@@ -293,10 +285,10 @@ export default function StaffDashboard({ navigation }) {
           </View>
         </View>
 
-        {/* TODAY'S SALES */}
+        {/* STOCK */}
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
-            <Text style={styles.heroLabel}>{t("todaysSales")}</Text>
+            <Text style={styles.heroLabel}>{t("remainingStock")}</Text>
 
             {currentBatch ? (
               <View style={styles.heroChip}>
@@ -307,7 +299,7 @@ export default function StaffDashboard({ navigation }) {
             ) : null}
           </View>
 
-          <Text style={styles.heroAmount}>{money(todayRevenue)}</Text>
+          <Text style={styles.heroAmount}>{remaining}</Text>
 
           <Text style={styles.heroSub}>
             {t("chickensSoldToday").replace("{count}", todayChickensSold)}
@@ -316,7 +308,7 @@ export default function StaffDashboard({ navigation }) {
 
         {/* STATS */}
         <View style={styles.statRow}>
-          <StatCard icon="layers" value={remaining} label={t("remainingStock")} />
+          <StatCard icon="checkmark-circle" value={sold} label={t("chickensSold")} />
           <StatCard icon="heart-dislike" value={todayDeaths} label={t("deathsToday")} />
           <StatCard
             icon="receipt"
@@ -380,9 +372,7 @@ export default function StaffDashboard({ navigation }) {
                   </Text>
                 </View>
 
-                {Number(item.amount) > 0 ? (
-                  <Text style={styles.activityAmount}>{money(item.amount)}</Text>
-                ) : item.quantity !== undefined ? (
+                {type === "Chicken Sale" || type === "Chicken Deaths Recorded" ? (
                   <Text style={styles.activityAmount}>
                     {item.quantity} {t("chickens")}
                   </Text>

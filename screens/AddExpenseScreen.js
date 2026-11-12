@@ -83,10 +83,10 @@ export default function AddExpenseScreen({ navigation, route }) {
 
   const categoryLabel = item =>
     item === "Feed"
-      ? t("catFeed")
+      ? t("Feed")
       : item === "Medicine"
-      ? t("catMedicine")
-      : t("catOther");
+      ? t("Medicine")
+      : t("Other");
 
   useEffect(() => {
     let active = true;
