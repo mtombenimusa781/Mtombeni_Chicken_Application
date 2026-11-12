@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -19,7 +20,8 @@ import {
   orderBy,
   serverTimestamp,
   doc,
-  getDoc
+  getDoc,
+  runTransaction
 } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../Config/firebase";
@@ -39,12 +41,33 @@ const PLACEHOLDER = "#888888";
 
 const SELLING_PRICE = 85;
 
+// Convert South African cellphone numbers to +27 format
+const normalizeSouthAfricanPhone = phone => {
+  const digits = phone.replace(/\D/g, "");
+
+  if (digits.length === 10 && digits.startsWith("0")) {
+    return `+27${digits.substring(1)}`;
+  }
+
+  if (digits.length === 11 && digits.startsWith("27")) {
+    return `+${digits}`;
+  }
+
+  return null;
+};
+
 export default function AddSaleScreen({ route, navigation }) {
   const { t } = useLanguage();
 
   const [batches, setBatches] = useState([]);
   const [batchId, setBatchId] = useState(route?.params?.batchId || "");
   const [quantity, setQuantity] = useState("");
+
+  // Customer information
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [smsConsent, setSmsConsent] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [batchesLoading, setBatchesLoading] = useState(true);
 
@@ -82,9 +105,37 @@ export default function AddSaleScreen({ route, navigation }) {
       return;
     }
 
+    const cleanCustomerName = customerName.trim();
+
+    if (!cleanCustomerName) {
+      Alert.alert(
+        "Customer Required",
+        "Please enter the customer's name."
+      );
+      return;
+    }
+
+    const normalizedPhone = normalizeSouthAfricanPhone(customerPhone);
+
+    if (!normalizedPhone) {
+      Alert.alert(
+        "Invalid Cellphone Number",
+        "Please enter a valid South African cellphone number, for example 0712345678."
+      );
+      return;
+    }
+
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      Alert.alert(t("loginRequired"), t("pleaseLoginAgain"));
+      return;
+    }
+
     setSaving(true);
 
     try {
+      // Get current sales and deaths to calculate available stock
       const [salesSnapshot, deathsSnapshot] = await Promise.all([
         new Promise((resolve, reject) => {
           const unsubscribe = onSnapshot(
@@ -99,6 +150,7 @@ export default function AddSaleScreen({ route, navigation }) {
             }
           );
         }),
+
         new Promise((resolve, reject) => {
           const unsubscribe = onSnapshot(
             query(collection(db, "deaths")),
@@ -116,13 +168,20 @@ export default function AddSaleScreen({ route, navigation }) {
 
       const sold = salesSnapshot.docs
         .filter(item => item.data().batchId === batchId)
-        .reduce((sum, item) => sum + Number(item.data().quantity || 0), 0);
+        .reduce(
+          (sum, item) => sum + Number(item.data().quantity || 0),
+          0
+        );
 
       const dead = deathsSnapshot.docs
         .filter(item => item.data().batchId === batchId)
-        .reduce((sum, item) => sum + Number(item.data().quantity || 0), 0);
+        .reduce(
+          (sum, item) => sum + Number(item.data().quantity || 0),
+          0
+        );
 
-      const remaining = Number(selectedBatch.initialChickens) - sold - dead;
+      const remaining =
+        Number(selectedBatch.initialChickens) - sold - dead;
 
       if (count > remaining) {
         Alert.alert(
@@ -132,26 +191,95 @@ export default function AddSaleScreen({ route, navigation }) {
         return;
       }
 
-      const currentUser = auth.currentUser;
+      // Customer document ID is the normalized cellphone number.
+      // This prevents the same customer being saved more than once.
+      const customerRef = doc(db, "customers", normalizedPhone);
 
-      if (!currentUser) {
-        Alert.alert(t("loginRequired"), t("pleaseLoginAgain"));
-        return;
-      }
+      // Create a new sale reference before the transaction.
+      const saleRef = doc(collection(db, "sales"));
 
-      const saleRef = await addDoc(collection(db, "sales"), {
-        batchId,
-        batchName: selectedBatch.batchName,
-        quantity: count,
-        pricePerChicken: SELLING_PRICE,
-        purchaseCostPerChicken: Number(selectedBatch.pricePerChicken),
-        totalAmount,
-        createdBy: currentUser.uid,
-        staffEmail: currentUser.email || "",
-        saleDate: new Date().toISOString().slice(0, 10),
-        createdAt: serverTimestamp()
+      // Save the sale and customer update together.
+      await runTransaction(db, async transaction => {
+        const customerSnapshot = await transaction.get(customerRef);
+
+        const saleData = {
+          batchId,
+          batchName: selectedBatch.batchName,
+
+          customerName: cleanCustomerName,
+          customerPhone: normalizedPhone,
+          customerSmsConsent: smsConsent,
+          customerSmsConsentAt: smsConsent
+            ? serverTimestamp()
+            : null,
+
+          quantity: count,
+          pricePerChicken: SELLING_PRICE,
+          purchaseCostPerChicken: Number(
+            selectedBatch.pricePerChicken
+          ),
+          totalAmount,
+
+          createdBy: currentUser.uid,
+          staffEmail: currentUser.email || "",
+
+          saleDate: new Date().toISOString().slice(0, 10),
+          createdAt: serverTimestamp()
+        };
+
+        transaction.set(saleRef, saleData);
+
+        if (!customerSnapshot.exists()) {
+          // First purchase by this customer
+          transaction.set(customerRef, {
+            phone: normalizedPhone,
+            name: cleanCustomerName,
+
+            smsConsent,
+            smsConsentAt: smsConsent
+              ? serverTimestamp()
+              : null,
+
+            smsOptOut: false,
+            smsOptOutAt: null,
+
+            createdBy: currentUser.uid,
+            createdAt: serverTimestamp(),
+
+            lastPurchaseAt: serverTimestamp(),
+            lastPurchaseBy: currentUser.uid,
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          // Existing customer: preserve their consent and opt-out status.
+          const existingCustomer = customerSnapshot.data();
+
+          const customerUpdate = {
+            name: cleanCustomerName,
+            lastPurchaseAt: serverTimestamp(),
+            lastPurchaseBy: currentUser.uid,
+            updatedAt: serverTimestamp()
+          };
+
+          // Only record new consent when the customer explicitly
+          // agrees and has not previously opted out.
+          if (
+            smsConsent === true &&
+            existingCustomer.smsConsent !== true &&
+            existingCustomer.smsOptOut !== true
+          ) {
+            customerUpdate.smsConsent = true;
+            customerUpdate.smsConsentAt = serverTimestamp();
+          }
+
+          transaction.set(customerRef, customerUpdate, {
+            merge: true
+          });
+        }
       });
 
+      // Record staff activity separately.
+      // A failure here will not undo the successfully saved sale.
       let activitySaved = true;
 
       try {
@@ -178,6 +306,7 @@ export default function AddSaleScreen({ route, navigation }) {
         });
       } catch (activityError) {
         activitySaved = false;
+
         console.log(
           "Activity tracking error:",
           activityError.code,
@@ -185,7 +314,11 @@ export default function AddSaleScreen({ route, navigation }) {
         );
       }
 
+      // Clear the form after a successful sale
       setQuantity("");
+      setCustomerName("");
+      setCustomerPhone("");
+      setSmsConsent(false);
 
       const revenueText = t("revenueRecorded").replace(
         "{amount}",
@@ -194,11 +327,23 @@ export default function AddSaleScreen({ route, navigation }) {
 
       Alert.alert(
         activitySaved ? t("saleSaved") : t("saleSavedLogFailed"),
-        activitySaved ? revenueText : `${revenueText}. ${t("activityNotSaved")}`,
-        [{ text: t("ok"), onPress: () => navigation.goBack() }]
+        activitySaved
+          ? revenueText
+          : `${revenueText}. ${t("activityNotSaved")}`,
+        [
+          {
+            text: t("ok"),
+            onPress: () => navigation.goBack()
+          }
+        ]
       );
     } catch (error) {
-      Alert.alert(t("couldNotSaveSale"), error.message);
+      console.log("Sale saving error:", error.code, error.message);
+
+      Alert.alert(
+        t("couldNotSaveSale"),
+        error.message || "Please try again."
+      );
     } finally {
       setSaving(false);
     }
@@ -217,28 +362,36 @@ export default function AddSaleScreen({ route, navigation }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* HEADER */}
         <View style={styles.headerCard}>
           <Text style={styles.logo}>💰</Text>
           <Text style={styles.heading}>{t("recordSaleHeading")}</Text>
 
           <View style={styles.priceBadge}>
-            <Text style={styles.priceLabel}>{t("sellingPriceLabel")}</Text>
-            <Text style={styles.price}>R {SELLING_PRICE.toFixed(2)}</Text>
+            <Text style={styles.priceLabel}>
+              {t("sellingPriceLabel")}
+            </Text>
+
+            <Text style={styles.price}>
+              R {SELLING_PRICE.toFixed(2)}
+            </Text>
           </View>
         </View>
 
         <View style={styles.card}>
-          {/* BATCH */}
           <Text style={[styles.label, styles.firstLabel]}>
             {t("selectBatch")}
           </Text>
 
           {batchesLoading ? (
-            <ActivityIndicator color={GREEN} style={styles.batchLoader} />
+            <ActivityIndicator
+              color={GREEN}
+              style={styles.batchLoader}
+            />
           ) : batches.length === 0 ? (
             <View style={styles.notice}>
-              <Text style={styles.noticeText}>{t("noBatchesAskAdmin")}</Text>
+              <Text style={styles.noticeText}>
+                {t("noBatchesAskAdmin")}
+              </Text>
             </View>
           ) : (
             <View style={styles.batchList}>
@@ -295,12 +448,70 @@ export default function AddSaleScreen({ route, navigation }) {
             </View>
           )}
 
+          {/* CUSTOMER DETAILS */}
+          <Text style={styles.label}>Customer Name</Text>
+
+          <TextInput
+            style={styles.input}
+            value={customerName}
+            onChangeText={setCustomerName}
+            placeholder="Enter customer's full name"
+            placeholderTextColor={PLACEHOLDER}
+            editable={!saving}
+            autoCapitalize="words"
+          />
+
+          <Text style={styles.label}>
+            Customer Cellphone Number
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            value={customerPhone}
+            onChangeText={setCustomerPhone}
+            placeholder="e.g. 0712345678"
+            placeholderTextColor={PLACEHOLDER}
+            keyboardType="phone-pad"
+            maxLength={13}
+            editable={!saving}
+          />
+
+          {/* SMS CONSENT */}
+          <TouchableOpacity
+            style={styles.consentRow}
+            onPress={() => setSmsConsent(!smsConsent)}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={smsConsent ? "checkbox" : "square-outline"}
+              size={24}
+              color={GREEN}
+            />
+
+            <Text style={styles.consentText}>
+              Customer agrees to receive SMS updates about chicken
+              availability.
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.consentNote}>
+            Only select this option after the customer has agreed to
+            receive these messages. Customers who have not consented
+            should not receive marketing SMS messages.
+          </Text>
+
           {/* QUANTITY */}
-          <Text style={styles.label}>{t("numSoldLabel")}</Text>
+          <Text style={styles.label}>
+            {t("numSoldLabel")}
+          </Text>
+
           <TextInput
             style={styles.input}
             value={quantity}
-            onChangeText={text => setQuantity(text.replace(/[^0-9]/g, ""))}
+            onChangeText={text =>
+              setQuantity(text.replace(/[^0-9]/g, ""))
+            }
             keyboardType="number-pad"
             placeholder={t("numSoldPlaceholder")}
             placeholderTextColor={PLACEHOLDER}
@@ -309,8 +520,14 @@ export default function AddSaleScreen({ route, navigation }) {
 
           {/* TOTAL */}
           <View style={styles.totalCard}>
-            <Text style={styles.totalLabel}>{t("expectedRevenue")}</Text>
-            <Text style={styles.total}>R {totalAmount.toFixed(2)}</Text>
+            <Text style={styles.totalLabel}>
+              {t("expectedRevenue")}
+            </Text>
+
+            <Text style={styles.total}>
+              R {totalAmount.toFixed(2)}
+            </Text>
+
             <Text style={styles.totalHint}>
               {quantity || "0"} × R {SELLING_PRICE.toFixed(2)}
             </Text>
@@ -318,19 +535,26 @@ export default function AddSaleScreen({ route, navigation }) {
 
           {/* SAVE */}
           <TouchableOpacity
-            style={[styles.button, saveDisabled && styles.disabledButton]}
+            style={[
+              styles.button,
+              saveDisabled && styles.disabledButton
+            ]}
             onPress={saveSale}
             disabled={saveDisabled}
           >
             {saving ? (
               <ActivityIndicator color={WHITE} />
             ) : (
-              <Text style={styles.buttonText}>{t("saveSale")}</Text>
+              <Text style={styles.buttonText}>
+                {t("saveSale")}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footer}>{t("appFooter")}</Text>
+        <Text style={styles.footer}>
+          {t("appFooter")}
+        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -347,7 +571,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40
   },
 
-  /* HEADER */
   headerCard: {
     backgroundColor: WHITE,
     padding: 25,
@@ -398,7 +621,6 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
 
-  /* MAIN CARD */
   card: {
     backgroundColor: WHITE,
     borderRadius: 20,
@@ -435,7 +657,6 @@ const styles = StyleSheet.create({
     backgroundColor: INPUT_BG
   },
 
-  /* BATCH SELECTION */
   batchLoader: {
     marginVertical: 14
   },
@@ -510,7 +731,32 @@ const styles = StyleSheet.create({
     borderColor: INPUT_BORDER
   },
 
-  /* TOTAL */
+  consentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 18,
+    padding: 12,
+    backgroundColor: INPUT_BG,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    gap: 10
+  },
+
+  consentText: {
+    flex: 1,
+    color: LABEL,
+    fontSize: 13,
+    lineHeight: 19
+  },
+
+  consentNote: {
+    color: MUTED,
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 8
+  },
+
   totalCard: {
     backgroundColor: INPUT_BG,
     borderWidth: 1,
@@ -540,7 +786,6 @@ const styles = StyleSheet.create({
     marginTop: 6
   },
 
-  /* BUTTON */
   button: {
     height: 54,
     backgroundColor: GOLD,

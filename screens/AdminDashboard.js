@@ -74,6 +74,12 @@ export default function AdminDashboard({ navigation }) {
         description="Manage staff accounts and review staff information."
         onPress={() => navigation.navigate("StaffManagement")}
       />
+      <MenuCard
+        icon="📩"
+        title="Customer Notifications"
+        description="View customers and send chicken availability SMS updates."
+        onPress={() => navigation.navigate("CustomerNotifications")}
+      />
 
       <Text style={styles.footer}>
         Mtombeni Chicken Business | Business Management

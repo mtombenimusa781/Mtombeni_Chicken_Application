@@ -27,6 +27,7 @@ import DailyRecordsScreen from "../screens/DailyRecordsScreen";
 import StaffManagementScreen from "../screens/StaffManagementScreen";
 import StaffActivityScreen from "../screens/StaffActivityScreen";
 import SettingsScreen from "../screens/SettingsScreen";
+import CustomerNotificationsScreen from "../screens/CustomerNotificationsScreen";
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -250,6 +251,14 @@ function BusinessDrawer({ role }) {
             component={StaffActivityScreen}
             options={{
               title: t("staffActivityTitle"),
+              drawerItemStyle: { display: "none" }
+            }}
+          />
+          <Drawer.Screen
+            name="CustomerNotifications"
+            component={CustomerNotificationsScreen}
+            options={{
+              title: "Customer Notifications",
               drawerItemStyle: { display: "none" }
             }}
           />
