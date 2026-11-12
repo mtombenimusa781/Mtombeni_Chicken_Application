@@ -1,6 +1,16 @@
-
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform
+} from "react-native";
 import {
   addDoc,
   collection,
@@ -11,21 +21,49 @@ import {
   doc,
   getDoc
 } from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../Config/firebase";
+import { useLanguage } from "../context/LanguageContext";
+
+const CREAM = "#F4F1E8";
+const WHITE = "#FFFFFF";
+const GREEN = "#245C38";
+const GOLD = "#af7c0f";
+const BORDER = "#E8E2D5";
+const INPUT_BG = "#FCFBF8";
+const INPUT_BORDER = "#DDD8CA";
+const LABEL = "#354638";
+const MUTED = "#7A817A";
+const FOOTER = "#9A9A8E";
+const PLACEHOLDER = "#888888";
 
 const SELLING_PRICE = 85;
 
 export default function AddSaleScreen({ route, navigation }) {
+  const { t } = useLanguage();
+
   const [batches, setBatches] = useState([]);
   const [batchId, setBatchId] = useState(route?.params?.batchId || "");
   const [quantity, setQuantity] = useState("");
   const [saving, setSaving] = useState(false);
+  const [batchesLoading, setBatchesLoading] = useState(true);
 
   useEffect(() => {
     const q = query(collection(db, "batches"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, snapshot => {
-      setBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, error => Alert.alert("Batch error", error.message));
+
+    return onSnapshot(
+      q,
+      snapshot => {
+        setBatches(
+          snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
+        );
+        setBatchesLoading(false);
+      },
+      error => {
+        setBatchesLoading(false);
+        Alert.alert(t("batchError"), error.message);
+      }
+    );
   }, []);
 
   const selectedBatch = batches.find(batch => batch.id === batchId);
@@ -35,12 +73,12 @@ export default function AddSaleScreen({ route, navigation }) {
     const count = Number(quantity);
 
     if (!selectedBatch) {
-      Alert.alert("Select a batch", "Choose the batch you are selling chickens from.");
+      Alert.alert(t("selectBatchTitle"), t("selectBatchSellMsg"));
       return;
     }
 
     if (!Number.isInteger(count) || count <= 0) {
-      Alert.alert("Invalid quantity", "Enter a whole number greater than zero.");
+      Alert.alert(t("invalidQuantity"), t("wholeNumberMsg"));
       return;
     }
 
@@ -77,140 +115,458 @@ export default function AddSaleScreen({ route, navigation }) {
       ]);
 
       const sold = salesSnapshot.docs
-        .filter(doc => doc.data().batchId === batchId)
-        .reduce((sum, doc) => sum + Number(doc.data().quantity || 0), 0);
+        .filter(item => item.data().batchId === batchId)
+        .reduce((sum, item) => sum + Number(item.data().quantity || 0), 0);
 
       const dead = deathsSnapshot.docs
-        .filter(doc => doc.data().batchId === batchId)
-        .reduce((sum, doc) => sum + Number(doc.data().quantity || 0), 0);
+        .filter(item => item.data().batchId === batchId)
+        .reduce((sum, item) => sum + Number(item.data().quantity || 0), 0);
 
       const remaining = Number(selectedBatch.initialChickens) - sold - dead;
 
       if (count > remaining) {
-        Alert.alert("Not enough stock", `This batch has approximately ${remaining} chickens remaining.`);
+        Alert.alert(
+          t("notEnoughStock"),
+          t("notEnoughStockMsg").replace("{remaining}", remaining)
+        );
         return;
       }
 
+      const currentUser = auth.currentUser;
 
-const currentUser = auth.currentUser;
+      if (!currentUser) {
+        Alert.alert(t("loginRequired"), t("pleaseLoginAgain"));
+        return;
+      }
 
-if (!currentUser) {
-  Alert.alert("Login required", "Please log in again.");
-  return;
-}
+      const saleRef = await addDoc(collection(db, "sales"), {
+        batchId,
+        batchName: selectedBatch.batchName,
+        quantity: count,
+        pricePerChicken: SELLING_PRICE,
+        purchaseCostPerChicken: Number(selectedBatch.pricePerChicken),
+        totalAmount,
+        createdBy: currentUser.uid,
+        staffEmail: currentUser.email || "",
+        saleDate: new Date().toISOString().slice(0, 10),
+        createdAt: serverTimestamp()
+      });
 
-const saleRef = await addDoc(collection(db, "sales"), {
-  batchId,
-  batchName: selectedBatch.batchName,
-  quantity: count,
-  pricePerChicken: SELLING_PRICE,
-  purchaseCostPerChicken: Number(selectedBatch.pricePerChicken),
-  totalAmount,
-  createdBy: currentUser.uid,
-  staffEmail: currentUser.email || "",
-  saleDate: new Date().toISOString().slice(0, 10),
-  createdAt: serverTimestamp()
-});
+      let activitySaved = true;
 
-let activitySaved = true;
+      try {
+        const profileSnapshot = await getDoc(
+          doc(db, "users", currentUser.uid)
+        );
 
-try {
-  const profileSnapshot = await getDoc(
-    doc(db, "users", currentUser.uid)
-  );
+        const staffName = profileSnapshot.exists()
+          ? profileSnapshot.data().name || "Staff member"
+          : "Staff member";
 
-  const staffName = profileSnapshot.exists()
-    ? profileSnapshot.data().name || "Staff member"
-    : "Staff member";
+        await addDoc(collection(db, "staffActivities"), {
+          staffUid: currentUser.uid,
+          staffName,
+          staffEmail: currentUser.email || "",
+          activityType: "Chicken Sale",
+          description: `Recorded ${count} chicken(s) sold from ${selectedBatch.batchName}`,
+          quantity: count,
+          amount: totalAmount,
+          batchId,
+          batchName: selectedBatch.batchName,
+          relatedRecordId: saleRef.id,
+          createdAt: serverTimestamp()
+        });
+      } catch (activityError) {
+        activitySaved = false;
+        console.log(
+          "Activity tracking error:",
+          activityError.code,
+          activityError.message
+        );
+      }
 
-    await addDoc(collection(db, "staffActivities"), {
-      staffUid: currentUser.uid,
-      staffName,
-      staffEmail: currentUser.email || "",
-      activityType: "Chicken Sale",
-      description: `Recorded ${count} chicken(s) sold from ${selectedBatch.batchName}`,
-      quantity: count,
-      amount: totalAmount,
-      batchId,
-      batchName: selectedBatch.batchName,
-      relatedRecordId: saleRef.id,
-      createdAt: serverTimestamp()
-    });
-  } catch (activityError) {
-    activitySaved = false;
-    console.log("Activity tracking error:", activityError.code, activityError.message);
-  }
+      setQuantity("");
 
-  setQuantity("");
+      const revenueText = t("revenueRecorded").replace(
+        "{amount}",
+        totalAmount.toFixed(2)
+      );
 
-  Alert.alert(
-    activitySaved ? "Sale saved" : "Sale saved; activity log failed",
-    activitySaved
-      ? `Revenue recorded: R ${totalAmount.toFixed(2)}`
-      : `Revenue recorded: R ${totalAmount.toFixed(2)}. The activity history could not be saved. Check your Firestore rules.`,
-    [{ text: "OK", onPress: () => navigation.goBack() }]
-  );
-
+      Alert.alert(
+        activitySaved ? t("saleSaved") : t("saleSavedLogFailed"),
+        activitySaved ? revenueText : `${revenueText}. ${t("activityNotSaved")}`,
+        [{ text: t("ok"), onPress: () => navigation.goBack() }]
+      );
     } catch (error) {
-      Alert.alert("Could not save sale", error.message);
+      Alert.alert(t("couldNotSaveSale"), error.message);
     } finally {
       setSaving(false);
     }
   };
 
+  const saveDisabled = saving || batchesLoading || !batchId;
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>Record Chicken Sale</Text>
-      <Text style={styles.label}>Selling price per chicken</Text>
-      <Text style={styles.price}>R {SELLING_PRICE.toFixed(2)}</Text>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */}
+        <View style={styles.headerCard}>
+          <Text style={styles.logo}>💰</Text>
+          <Text style={styles.heading}>{t("recordSaleHeading")}</Text>
 
-      <Text style={styles.label}>Select batch</Text>
-      {batches.map(batch => (
-        <TouchableOpacity
-          key={batch.id}
-          style={[styles.batch, batchId === batch.id && styles.selected]}
-          onPress={() => setBatchId(batch.id)}
-        >
-          <Text style={styles.batchName}>{batch.batchName}</Text>
-          <Text style={styles.muted}>Purchase price: R {Number(batch.pricePerChicken).toFixed(2)} each</Text>
-          {batchId === batch.id && <Text style={styles.selectedText}>Selected</Text>}
-        </TouchableOpacity>
-      ))}
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceLabel}>{t("sellingPriceLabel")}</Text>
+            <Text style={styles.price}>R {SELLING_PRICE.toFixed(2)}</Text>
+          </View>
+        </View>
 
-      <Text style={styles.label}>Number of chickens sold</Text>
-      <TextInput
-        style={styles.input}
-        value={quantity}
-        onChangeText={setQuantity}
-        keyboardType="number-pad"
-        placeholder="e.g. 5"
-      />
+        <View style={styles.card}>
+          {/* BATCH */}
+          <Text style={[styles.label, styles.firstLabel]}>
+            {t("selectBatch")}
+          </Text>
 
-      <View style={styles.totalCard}>
-        <Text style={styles.label}>Expected sale revenue</Text>
-        <Text style={styles.total}>R {totalAmount.toFixed(2)}</Text>
-      </View>
+          {batchesLoading ? (
+            <ActivityIndicator color={GREEN} style={styles.batchLoader} />
+          ) : batches.length === 0 ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>{t("noBatchesAskAdmin")}</Text>
+            </View>
+          ) : (
+            <View style={styles.batchList}>
+              {batches.map(batch => {
+                const selected = batchId === batch.id;
 
-      <TouchableOpacity style={styles.button} onPress={saveSale} disabled={saving}>
-        <Text style={styles.buttonText}>{saving ? "Saving..." : "Save Sale"}</Text>
-      </TouchableOpacity>
-    </ScrollView>
+                return (
+                  <TouchableOpacity
+                    key={batch.id}
+                    style={[
+                      styles.batchOption,
+                      selected && styles.batchOptionSelected
+                    ]}
+                    onPress={() => setBatchId(batch.id)}
+                    disabled={saving}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.batchOptionText}>
+                      <Text
+                        style={[
+                          styles.batchName,
+                          selected && styles.batchNameSelected
+                        ]}
+                      >
+                        {batch.batchName || t("unnamedBatch")}
+                      </Text>
+
+                      <Text style={styles.batchMeta}>
+                        {t("purchasePriceEach").replace(
+                          "{price}",
+                          Number(batch.pricePerChicken || 0).toFixed(2)
+                        )}
+                      </Text>
+
+                      {selected && (
+                        <Text style={styles.selectedTag}>
+                          ✓ {t("selectedLabel")}
+                        </Text>
+                      )}
+                    </View>
+
+                    {selected ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={26}
+                        color={GOLD}
+                      />
+                    ) : (
+                      <View style={styles.emptyCircle} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* QUANTITY */}
+          <Text style={styles.label}>{t("numSoldLabel")}</Text>
+          <TextInput
+            style={styles.input}
+            value={quantity}
+            onChangeText={text => setQuantity(text.replace(/[^0-9]/g, ""))}
+            keyboardType="number-pad"
+            placeholder={t("numSoldPlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
+            editable={!saving}
+          />
+
+          {/* TOTAL */}
+          <View style={styles.totalCard}>
+            <Text style={styles.totalLabel}>{t("expectedRevenue")}</Text>
+            <Text style={styles.total}>R {totalAmount.toFixed(2)}</Text>
+            <Text style={styles.totalHint}>
+              {quantity || "0"} × R {SELLING_PRICE.toFixed(2)}
+            </Text>
+          </View>
+
+          {/* SAVE */}
+          <TouchableOpacity
+            style={[styles.button, saveDisabled && styles.disabledButton]}
+            onPress={saveSale}
+            disabled={saveDisabled}
+          >
+            {saving ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.buttonText}>{t("saveSale")}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.footer}>{t("appFooter")}</Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: "#F4F8F2", flexGrow: 1 },
-  heading: { fontSize: 23, fontWeight: "bold", color: "#245C38", marginBottom: 18 },
-  label: { color: "#245C38", fontWeight: "600", marginTop: 14, marginBottom: 8 },
-  price: { fontSize: 22, fontWeight: "bold", color: "#245C38" },
-  batch: { backgroundColor: "white", borderWidth: 1, borderColor: "#D8E2D5", borderRadius: 10, padding: 14, marginBottom: 9 },
-  selected: { borderColor: "#245C38", borderWidth: 2 },
-  batchName: { fontSize: 16, fontWeight: "bold", color: "#245C38" },
-  muted: { color: "#666", marginTop: 4 },
-  selectedText: { color: "#245C38", fontWeight: "bold", marginTop: 5 },
-  input: { backgroundColor: "white", borderWidth: 1, borderColor: "#D8E2D5", borderRadius: 9, padding: 12, fontSize: 16 },
-  totalCard: { backgroundColor: "white", padding: 16, borderRadius: 10, marginTop: 20 },
-  total: { color: "#245C38", fontSize: 24, fontWeight: "bold" },
-  button: { backgroundColor: "#245C38", padding: 15, borderRadius: 10, alignItems: "center", marginTop: 22 },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "bold" }
+  screen: {
+    flex: 1,
+    backgroundColor: CREAM
+  },
+
+  container: {
+    padding: 24,
+    paddingBottom: 40
+  },
+
+  /* HEADER */
+  headerCard: {
+    backgroundColor: WHITE,
+    padding: 25,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
+  },
+
+  logo: {
+    fontSize: 52,
+    marginBottom: 8
+  },
+
+  heading: {
+    color: GREEN,
+    fontSize: 23,
+    fontWeight: "bold",
+    textAlign: "center"
+  },
+
+  priceBadge: {
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    marginTop: 16,
+    alignItems: "center"
+  },
+
+  priceLabel: {
+    color: MUTED,
+    fontSize: 12
+  },
+
+  price: {
+    color: GOLD,
+    fontSize: 26,
+    fontWeight: "bold",
+    marginTop: 4
+  },
+
+  /* MAIN CARD */
+  card: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 25,
+    borderWidth: 1,
+    borderColor: BORDER,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
+  },
+
+  label: {
+    color: LABEL,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 9,
+    marginTop: 18
+  },
+
+  firstLabel: {
+    marginTop: 0
+  },
+
+  input: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    fontSize: 15,
+    color: "#26372B",
+    backgroundColor: INPUT_BG
+  },
+
+  /* BATCH SELECTION */
+  batchLoader: {
+    marginVertical: 14
+  },
+
+  notice: {
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    padding: 16
+  },
+
+  noticeText: {
+    color: MUTED,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center"
+  },
+
+  batchList: {
+    gap: 10
+  },
+
+  batchOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    backgroundColor: INPUT_BG
+  },
+
+  batchOptionSelected: {
+    borderColor: GREEN,
+    borderWidth: 2,
+    backgroundColor: WHITE
+  },
+
+  batchOptionText: {
+    flex: 1
+  },
+
+  batchName: {
+    color: LABEL,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+
+  batchNameSelected: {
+    color: GREEN
+  },
+
+  batchMeta: {
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 4
+  },
+
+  selectedTag: {
+    color: GREEN,
+    fontSize: 12,
+    fontWeight: "bold",
+    marginTop: 6
+  },
+
+  emptyCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: INPUT_BORDER
+  },
+
+  /* TOTAL */
+  totalCard: {
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 14,
+    padding: 18,
+    marginTop: 24,
+    alignItems: "center"
+  },
+
+  totalLabel: {
+    color: LABEL,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+
+  total: {
+    color: GREEN,
+    fontSize: 30,
+    fontWeight: "bold",
+    marginTop: 8
+  },
+
+  totalHint: {
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 6
+  },
+
+  /* BUTTON */
+  button: {
+    height: 54,
+    backgroundColor: GOLD,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 22,
+    borderBottomWidth: 3,
+    borderBottomColor: GOLD
+  },
+
+  disabledButton: {
+    opacity: 0.6
+  },
+
+  buttonText: {
+    color: WHITE,
+    fontSize: 16,
+    fontWeight: "bold",
+    letterSpacing: 0.5
+  },
+
+  footer: {
+    textAlign: "center",
+    color: FOOTER,
+    fontSize: 12,
+    marginTop: 26
+  }
 });

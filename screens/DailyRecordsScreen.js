@@ -1,13 +1,45 @@
-
 import React, { useEffect, useState } from "react";
-import {View,Text,TextInput,TouchableOpacity,StyleSheet,Alert,ScrollView,ActivityIndicator} from "react-native";
-import {addDoc,collection,onSnapshot,query,orderBy,serverTimestamp,doc,getDoc} from "firebase/firestore";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform
+} from "react-native";
+import {
+  addDoc,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp,
+  doc,
+  getDoc
+} from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../Config/firebase";
+import { useLanguage } from "../context/LanguageContext";
 
+const CREAM = "#F4F1E8";
+const WHITE = "#FFFFFF";
 const GREEN = "#245C38";
-const LIGHT_GREEN = "#F4F8F2";
+const GOLD = "#af7c0f";
+const BORDER = "#E8E2D5";
+const INPUT_BG = "#FCFBF8";
+const INPUT_BORDER = "#DDD8CA";
+const LABEL = "#354638";
+const MUTED = "#7A817A";
+const FOOTER = "#9A9A8E";
+const PLACEHOLDER = "#888888";
 
 export default function DailyRecordsScreen({ route, navigation }) {
+  const { t } = useLanguage();
+
   const routeBatchId = route?.params?.batchId || "";
   const routeBatchName = route?.params?.batchName || "";
 
@@ -45,10 +77,7 @@ export default function DailyRecordsScreen({ route, navigation }) {
         console.log("Role loading error:", error.code, error.message);
 
         if (active) {
-          Alert.alert(
-            "Account error",
-            "Could not verify your account permissions."
-          );
+          Alert.alert(t("accountError"), t("permError"));
         }
       } finally {
         if (active) setRoleLoading(false);
@@ -92,9 +121,7 @@ export default function DailyRecordsScreen({ route, navigation }) {
 
         setBatches(batchList);
 
-        const selectedBatch = batchList.find(
-          item => item.id === batchId
-        );
+        const selectedBatch = batchList.find(item => item.id === batchId);
 
         if (selectedBatch) {
           setBatchName(selectedBatch.batchName || "");
@@ -106,10 +133,7 @@ export default function DailyRecordsScreen({ route, navigation }) {
         console.log("Batch loading error:", error.code, error.message);
         setBatchesLoading(false);
 
-        Alert.alert(
-          "Batch error",
-          "Could not load the available batches."
-        );
+        Alert.alert(t("batchError"), t("couldNotLoadAvailable"));
       }
     );
 
@@ -118,7 +142,7 @@ export default function DailyRecordsScreen({ route, navigation }) {
 
   const selectBatch = batch => {
     setBatchId(batch.id);
-    setBatchName(batch.batchName || "Unnamed batch");
+    setBatchName(batch.batchName || t("unnamedBatch"));
   };
 
   const isValidDate = value => {
@@ -138,41 +162,29 @@ export default function DailyRecordsScreen({ route, navigation }) {
     const user = auth.currentUser;
 
     if (!user) {
-      Alert.alert("Not signed in", "Please log in again.");
+      Alert.alert(t("notSignedIn"), t("pleaseLoginAgain"));
       return;
     }
 
     if (userRole !== "staff") {
-      Alert.alert(
-        "Staff access required",
-        "Only staff accounts can create daily records."
-      );
+      Alert.alert(t("staffAccessRequired"), t("onlyStaffDailyShort"));
       return;
     }
 
     const selectedBatch = batches.find(item => item.id === batchId);
 
     if (!selectedBatch) {
-      Alert.alert(
-        "Select a batch",
-        "Please select an existing chicken batch."
-      );
+      Alert.alert(t("selectBatchTitle"), t("selectExistingChickenBatch"));
       return;
     }
 
     if (!isValidDate(recordDate.trim())) {
-      Alert.alert(
-        "Invalid date",
-        "Enter a real date in YYYY-MM-DD format, for example 2026-10-28."
-      );
+      Alert.alert(t("invalidDate"), t("invalidDateMsg"));
       return;
     }
 
     if (!feedDetails.trim() && !notes.trim()) {
-      Alert.alert(
-        "Add details",
-        "Enter feeding information or daily notes before saving."
-      );
+      Alert.alert(t("addDetails"), t("addDetailsMsg"));
       return;
     }
 
@@ -193,15 +205,15 @@ export default function DailyRecordsScreen({ route, navigation }) {
       setFeedDetails("");
       setNotes("");
 
-      Alert.alert("Saved", "Daily record has been saved successfully.");
+      Alert.alert(t("saved"), t("dailySaved"));
     } catch (error) {
       console.log("Daily record save error:", error.code, error.message);
 
       Alert.alert(
-        "Could not save",
+        t("couldNotSave"),
         error.code === "permission-denied"
-          ? "Firebase rules did not allow this record. Check that staff can create daily records and that the required fields match your rules."
-          : error.message || "Please try again."
+          ? t("permissionDeniedDaily")
+          : error.message || t("tryAgain")
       );
     } finally {
       setSaving(false);
@@ -212,7 +224,7 @@ export default function DailyRecordsScreen({ route, navigation }) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={GREEN} />
-        <Text style={styles.helperText}>Checking account permissions...</Text>
+        <Text style={styles.helperText}>{t("checkingPermissions")}</Text>
       </View>
     );
   }
@@ -220,298 +232,431 @@ export default function DailyRecordsScreen({ route, navigation }) {
   if (userRole !== "staff") {
     return (
       <View style={styles.centered}>
-        <Text style={styles.heading}>Daily Batch Record</Text>
-        <Text style={styles.helperText}>
-          Only staff accounts can create daily records. Please use a staff
-          account to continue.
-        </Text>
+        <View style={styles.card}>
+          <Text style={styles.noAccessIcon}>🔒</Text>
+          <Text style={styles.heading}>{t("dailyBatchRecord")}</Text>
+          <Text style={styles.helperText}>{t("onlyStaffDaily")}</Text>
 
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => navigation?.goBack()}
-        >
-          <Text style={styles.secondaryButtonText}>Go Back</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation?.goBack()}
+          >
+            <Text style={styles.secondaryButtonText}>{t("goBack")}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
+  const saveDisabled = saving || batchesLoading || !batchId;
+
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.screen}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
     >
-      <View style={styles.header}>
-        <Text style={styles.brand}>Mtombeni Chicken Business 🐔</Text>
-        <Text style={styles.headerTitle}>Daily Batch Record</Text>
-        <Text style={styles.headerSubtitle}>
-          Record feeding information and daily observations.
-        </Text>
-      </View>
-
-      <Text style={styles.label}>Select batch *</Text>
-
-      {batchesLoading ? (
-        <ActivityIndicator color={GREEN} style={styles.loader} />
-      ) : batches.length === 0 ? (
-        <View style={styles.notice}>
-          <Text style={styles.helperText}>
-            No batches are available. Ask the admin to create a batch first.
-          </Text>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */}
+        <View style={styles.headerCard}>
+          <Text style={styles.logo}>📅</Text>
+          <Text style={styles.heading}>{t("dailyBatchRecord")}</Text>
+          <Text style={styles.subtitle}>{t("dailySubtitle")}</Text>
         </View>
-      ) : routeBatchId ? (
-        <View style={styles.selectedBatch}>
-          <Text style={styles.selectedBatchLabel}>Selected batch</Text>
-          <Text style={styles.selectedBatchName}>
-            {batchName || "Loading batch..."}
+
+        <View style={styles.card}>
+          {/* BATCH */}
+          <Text style={[styles.label, styles.firstLabel]}>
+            {t("selectBatchStar")}
           </Text>
-        </View>
-      ) : (
-        batches.map(batch => (
+
+          {batchesLoading ? (
+            <ActivityIndicator color={GREEN} style={styles.batchLoader} />
+          ) : batches.length === 0 ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>{t("noBatchesAskAdmin")}</Text>
+            </View>
+          ) : routeBatchId ? (
+            <View style={styles.selectedBatch}>
+              <Text style={styles.selectedBatchLabel}>
+                {t("selectedBatch")}
+              </Text>
+              <Text style={styles.selectedBatchName}>
+                {batchName || t("loadingBatchShort")}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.batchList}>
+              {batches.map(batch => {
+                const selected = batchId === batch.id;
+
+                return (
+                  <TouchableOpacity
+                    key={batch.id}
+                    style={[
+                      styles.batchOption,
+                      selected && styles.batchOptionSelected
+                    ]}
+                    onPress={() => selectBatch(batch)}
+                    disabled={saving}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.batchOptionText}>
+                      <Text
+                        style={[
+                          styles.batchName,
+                          selected && styles.batchNameSelected
+                        ]}
+                      >
+                        {batch.batchName || t("unnamedBatch")}
+                      </Text>
+
+                      <Text style={styles.batchMeta}>
+                        {t("startingChickens")}: {batch.initialChickens || 0}
+                      </Text>
+
+                      {selected && (
+                        <Text style={styles.selectedTag}>
+                          ✓ {t("selectedLabel")}
+                        </Text>
+                      )}
+                    </View>
+
+                    {selected ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={26}
+                        color={GOLD}
+                      />
+                    ) : (
+                      <View style={styles.emptyCircle} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* DATE */}
+          <Text style={styles.label}>{t("recordDateLabel")}</Text>
+          <TextInput
+            style={styles.input}
+            value={recordDate}
+            onChangeText={setRecordDate}
+            placeholder="2026-10-28"
+            placeholderTextColor={PLACEHOLDER}
+            autoCapitalize="none"
+            keyboardType="numbers-and-punctuation"
+            editable={!saving}
+          />
+
+          {/* FEEDING */}
+          <Text style={styles.label}>{t("feedingInfoLabel")}</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={feedDetails}
+            onChangeText={setFeedDetails}
+            placeholder={t("feedingPlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
+            multiline
+            textAlignVertical="top"
+            editable={!saving}
+          />
+
+          {/* NOTES */}
+          <Text style={styles.label}>{t("dailyNotesLabel")}</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder={t("dailyNotesPlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
+            multiline
+            textAlignVertical="top"
+            editable={!saving}
+          />
+
+          {/* SAVE */}
           <TouchableOpacity
-            key={batch.id}
-            style={[
-              styles.batch,
-              batchId === batch.id && styles.selected
-            ]}
-            onPress={() => selectBatch(batch)}
-            disabled={saving}
+            style={[styles.button, saveDisabled && styles.disabledButton]}
+            onPress={saveRecord}
+            disabled={saveDisabled}
           >
-            <Text
-              style={[
-                styles.batchName,
-                batchId === batch.id && styles.selectedBatchText
-              ]}
-            >
-              {batch.batchName || "Unnamed batch"}
-            </Text>
-
-            <Text
-              style={[
-                styles.batchMeta,
-                batchId === batch.id && styles.selectedBatchText
-              ]}
-            >
-              Starting chickens: {batch.initialChickens || 0}
-            </Text>
-
-            {batchId === batch.id && (
-              <Text style={styles.selectedBatchText}>✓ Selected</Text>
+            {saving ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.buttonText}>{t("saveDailyRecord")}</Text>
             )}
           </TouchableOpacity>
-        ))
-      )}
 
-      <Text style={styles.label}>Record date (YYYY-MM-DD) *</Text>
-      <TextInput
-        style={styles.input}
-        value={recordDate}
-        onChangeText={setRecordDate}
-        placeholder="2026-10-28"
-        placeholderTextColor="#89958B"
-        autoCapitalize="none"
-        editable={!saving}
-      />
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation?.goBack()}
+            disabled={saving}
+          >
+            <Text style={styles.secondaryButtonText}>{t("goBack")}</Text>
+          </TouchableOpacity>
+        </View>
 
-      <Text style={styles.label}>Feeding information</Text>
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        value={feedDetails}
-        onChangeText={setFeedDetails}
-        placeholder="Feed type, amount given, feeding observations..."
-        placeholderTextColor="#89958B"
-        multiline
-        editable={!saving}
-      />
-
-      <Text style={styles.label}>Daily notes</Text>
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        value={notes}
-        onChangeText={setNotes}
-        placeholder="General observations or issues..."
-        placeholderTextColor="#89958B"
-        multiline
-        editable={!saving}
-      />
-
-      <TouchableOpacity
-        style={[
-          styles.button,
-          (saving || batchesLoading || !batchId) && styles.disabledButton
-        ]}
-        onPress={saveRecord}
-        disabled={saving || batchesLoading || !batchId}
-      >
-        {saving ? (
-          <ActivityIndicator color="#FFFFFF" />
-        ) : (
-          <Text style={styles.buttonText}>Save Daily Record</Text>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.secondaryButton}
-        onPress={() => navigation?.goBack()}
-        disabled={saving}
-      >
-        <Text style={styles.secondaryButtonText}>Go Back</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <Text style={styles.footer}>{t("appFooter")}</Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: LIGHT_GREEN
+    backgroundColor: CREAM
   },
+
   container: {
-    padding: 20,
-    paddingBottom: 35
+    padding: 24,
+    paddingBottom: 40
   },
+
   centered: {
     flex: 1,
-    backgroundColor: LIGHT_GREEN,
+    backgroundColor: CREAM,
     justifyContent: "center",
     alignItems: "center",
     padding: 24
   },
-  header: {
-    backgroundColor: GREEN,
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 22
+
+  /* HEADER */
+  headerCard: {
+    backgroundColor: WHITE,
+    padding: 25,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
   },
-  brand: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold"
-  },
-  headerTitle: {
-    fontSize: 23,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginTop: 18
-  },
-  headerSubtitle: {
-    color: "#E1EDE3",
-    marginTop: 7,
-    fontSize: 13,
-    lineHeight: 19
-  },
-  heading: {
-    fontSize: 23,
-    fontWeight: "bold",
-    color: GREEN,
-    marginBottom: 12,
-    textAlign: "center"
-  },
-  label: {
-    fontWeight: "600",
-    color: GREEN,
-    marginTop: 14,
+
+  logo: {
+    fontSize: 52,
     marginBottom: 8
   },
-  batch: {
-    backgroundColor: "#FFFFFF",
+
+  heading: {
+    color: GREEN,
+    fontSize: 23,
+    fontWeight: "bold",
+    textAlign: "center"
+  },
+
+  subtitle: {
+    color: MUTED,
+    fontSize: 14,
+    marginTop: 7,
+    textAlign: "center"
+  },
+
+  /* MAIN CARD */
+  card: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 25,
     borderWidth: 1,
-    borderColor: "#D8E2D5",
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 9
+    borderColor: BORDER,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
   },
-  selected: {
-    backgroundColor: GREEN,
-    borderColor: GREEN,
-    borderWidth: 2
+
+  noAccessIcon: {
+    fontSize: 44,
+    textAlign: "center",
+    marginBottom: 10
   },
-  batchName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: GREEN
+
+  helperText: {
+    color: MUTED,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    marginTop: 10
   },
-  batchMeta: {
-    color: "#66736A",
-    fontSize: 12,
-    marginTop: 5
+
+  label: {
+    color: LABEL,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 9,
+    marginTop: 18
   },
-  selectedBatchText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    marginTop: 5
+
+  firstLabel: {
+    marginTop: 0
   },
+
+  input: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    fontSize: 15,
+    color: "#26372B",
+    backgroundColor: INPUT_BG
+  },
+
+  multiline: {
+    height: 110,
+    paddingTop: 14
+  },
+
+  /* BATCH SELECTION */
+  batchLoader: {
+    marginVertical: 14
+  },
+
+  notice: {
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    padding: 16
+  },
+
+  noticeText: {
+    color: MUTED,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center"
+  },
+
   selectedBatch: {
-    backgroundColor: "#E4F1E5",
-    borderColor: "#C7DDC9",
-    borderWidth: 1,
-    borderRadius: 10,
+    backgroundColor: INPUT_BG,
+    borderWidth: 2,
+    borderColor: GREEN,
+    borderRadius: 12,
     padding: 15
   },
+
   selectedBatchLabel: {
-    color: "#526456",
+    color: MUTED,
     fontSize: 12
   },
+
   selectedBatchName: {
     color: GREEN,
     fontSize: 17,
     fontWeight: "bold",
-    marginTop: 5
+    marginTop: 4
   },
-  input: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#D8E2D5",
-    borderRadius: 9,
-    padding: 12,
-    fontSize: 16,
-    color: "#222222"
+
+  batchList: {
+    gap: 10
   },
-  multiline: {
-    minHeight: 100,
-    textAlignVertical: "top"
-  },
-  button: {
-    backgroundColor: GREEN,
-    padding: 15,
-    borderRadius: 10,
+
+  batchOption: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 24
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    backgroundColor: INPUT_BG
   },
+
+  batchOptionSelected: {
+    borderColor: GREEN,
+    borderWidth: 2,
+    backgroundColor: WHITE
+  },
+
+  batchOptionText: {
+    flex: 1
+  },
+
+  batchName: {
+    color: LABEL,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+
+  batchNameSelected: {
+    color: GREEN
+  },
+
+  batchMeta: {
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 4
+  },
+
+  selectedTag: {
+    color: GREEN,
+    fontSize: 12,
+    fontWeight: "bold",
+    marginTop: 6
+  },
+
+  emptyCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: INPUT_BORDER
+  },
+
+  /* BUTTONS */
+  button: {
+    height: 54,
+    backgroundColor: GOLD,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+    borderBottomWidth: 3,
+    borderBottomColor: GOLD
+  },
+
   disabledButton: {
     opacity: 0.6
   },
+
   buttonText: {
-    color: "#FFFFFF",
+    color: WHITE,
+    fontSize: 16,
     fontWeight: "bold",
-    fontSize: 16
+    letterSpacing: 0.5
   },
+
   secondaryButton: {
-    borderWidth: 1,
+    height: 52,
+    borderWidth: 1.5,
     borderColor: GREEN,
-    padding: 14,
-    borderRadius: 10,
+    backgroundColor: WHITE,
+    borderRadius: 12,
     alignItems: "center",
-    marginTop: 10
+    justifyContent: "center",
+    marginTop: 12
   },
+
   secondaryButtonText: {
     color: GREEN,
-    fontWeight: "600"
+    fontSize: 15,
+    fontWeight: "bold"
   },
-  loader: {
-    marginVertical: 18
-  },
-  notice: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    padding: 15
-  },
-  helperText: {
-    color: "#66736A",
-    fontSize: 14,
+
+  footer: {
     textAlign: "center",
-    lineHeight: 21,
-    marginTop: 8
+    color: FOOTER,
+    fontSize: 12,
+    marginTop: 26
   }
 });

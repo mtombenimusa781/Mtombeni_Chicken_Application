@@ -1,27 +1,52 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView,
-  ActivityIndicator, Modal, TextInput
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  Modal,
+  TextInput
 } from "react-native";
 import {
-  collection, onSnapshot, query, where, doc, getDoc,
-  updateDoc, deleteDoc
+  collection,
+  onSnapshot,
+  query,
+  where,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc
 } from "firebase/firestore";
 import { auth, db } from "../Config/firebase";
+import { useLanguage } from "../context/LanguageContext";
 
-const GREEN = "#245C38";
 const CREAM = "#F4F1E8";
-const LIGHT_GREEN = "#E4F1E5";
-const BROWN = "#8B5E3C";
+const WHITE = "#FFFFFF";
+const GREEN = "#245C38";
+const GOLD = "#af7c0f";
+const BORDER = "#E8E2D5";
+const INPUT_BG = "#FCFBF8";
+const INPUT_BORDER = "#DDD8CA";
+const LABEL = "#354638";
+const MUTED = "#7A817A";
+const SOFT_GREEN = "#E4F1E5";
 const RED = "#B42318";
+
 const SELLING_PRICE = 85;
+const CATEGORIES = ["Feed", "Medicine", "Other"];
 
 const money = amount =>
-  "R " + Number(amount || 0).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
+  "R " +
+  Number(amount || 0).toLocaleString("en-ZA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 
 export default function BatchDetailsScreen({ route, navigation }) {
+  const { t } = useLanguage();
   const { batchId, batchName } = route.params;
 
   const [batch, setBatch] = useState(null);
@@ -38,6 +63,23 @@ export default function BatchDetailsScreen({ route, navigation }) {
   const [editCategory, setEditCategory] = useState("Other");
   const [editUnitCost, setEditUnitCost] = useState("");
   const [updating, setUpdating] = useState(false);
+
+  /* Stored values stay in English; only the display is translated */
+  const categoryLabel = category =>
+    category === "Feed"
+      ? t("catFeed")
+      : category === "Medicine"
+      ? t("catMedicine")
+      : category === "Other"
+      ? t("catOther")
+      : category || t("expense");
+
+  const statusLabel = status =>
+    status === "closed"
+      ? t("statusClosed")
+      : status === "active" || !status
+      ? t("statusActive")
+      : status;
 
   useEffect(() => {
     let active = true;
@@ -63,10 +105,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
         console.log("Role error:", error.code, error.message);
 
         if (active) {
-          Alert.alert(
-            "Account error",
-            "Could not verify your account permissions."
-          );
+          Alert.alert(t("accountError"), t("permError"));
         }
       } finally {
         if (active) setRoleLoading(false);
@@ -91,12 +130,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
     let expensesLoaded = false;
 
     const updateLoading = () => {
-      if (
-        batchLoaded &&
-        salesLoaded &&
-        deathsLoaded &&
-        expensesLoaded
-      ) {
+      if (batchLoaded && salesLoaded && deathsLoaded && expensesLoaded) {
         setLoading(false);
       }
     };
@@ -104,11 +138,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
     const unsubBatch = onSnapshot(
       doc(db, "batches", batchId),
       snap => {
-        setBatch(
-          snap.exists()
-            ? { id: snap.id, ...snap.data() }
-            : null
-        );
+        setBatch(snap.exists() ? { id: snap.id, ...snap.data() } : null);
 
         batchLoaded = true;
         updateLoading();
@@ -118,22 +148,14 @@ export default function BatchDetailsScreen({ route, navigation }) {
         batchLoaded = true;
         updateLoading();
 
-        Alert.alert("Batch error", "Could not load batch details.");
+        Alert.alert(t("batchError"), t("couldNotLoadDetails"));
       }
     );
 
     const unsubSales = onSnapshot(
-      query(
-        collection(db, "sales"),
-        where("batchId", "==", batchId)
-      ),
+      query(collection(db, "sales"), where("batchId", "==", batchId)),
       snap => {
-        setSales(
-          snap.docs.map(item => ({
-            id: item.id,
-            ...item.data()
-          }))
-        );
+        setSales(snap.docs.map(item => ({ id: item.id, ...item.data() })));
 
         salesLoaded = true;
         updateLoading();
@@ -143,22 +165,14 @@ export default function BatchDetailsScreen({ route, navigation }) {
         salesLoaded = true;
         updateLoading();
 
-        Alert.alert("Sales error", "Could not load sales for this batch.");
+        Alert.alert(t("salesError"), t("couldNotLoadSales"));
       }
     );
 
     const unsubDeaths = onSnapshot(
-      query(
-        collection(db, "deaths"),
-        where("batchId", "==", batchId)
-      ),
+      query(collection(db, "deaths"), where("batchId", "==", batchId)),
       snap => {
-        setDeaths(
-          snap.docs.map(item => ({
-            id: item.id,
-            ...item.data()
-          }))
-        );
+        setDeaths(snap.docs.map(item => ({ id: item.id, ...item.data() })));
 
         deathsLoaded = true;
         updateLoading();
@@ -168,22 +182,14 @@ export default function BatchDetailsScreen({ route, navigation }) {
         deathsLoaded = true;
         updateLoading();
 
-        Alert.alert("Deaths error", "Could not load death records.");
+        Alert.alert(t("deathsError"), t("couldNotLoadDeaths"));
       }
     );
 
     const unsubExpenses = onSnapshot(
-      query(
-        collection(db, "expenses"),
-        where("batchId", "==", batchId)
-      ),
+      query(collection(db, "expenses"), where("batchId", "==", batchId)),
       snap => {
-        setExpenses(
-          snap.docs.map(item => ({
-            id: item.id,
-            ...item.data()
-          }))
-        );
+        setExpenses(snap.docs.map(item => ({ id: item.id, ...item.data() })));
 
         expensesLoaded = true;
         updateLoading();
@@ -193,7 +199,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
         expensesLoaded = true;
         updateLoading();
 
-        Alert.alert("Expenses error", "Could not load expenses for this batch.");
+        Alert.alert(t("expensesError"), t("couldNotLoadExpenses"));
       }
     );
 
@@ -218,18 +224,14 @@ export default function BatchDetailsScreen({ route, navigation }) {
   const revenue = sales.reduce(
     (sum, item) =>
       sum +
-      Number(
-        item.totalAmount ??
-        Number(item.quantity || 0) * SELLING_PRICE
-      ),
+      Number(item.totalAmount ?? Number(item.quantity || 0) * SELLING_PRICE),
     0
   );
 
   const starting = Number(batch?.initialChickens || 0);
 
   const purchaseCost = Number(
-    batch?.totalPurchaseCost ??
-    starting * Number(batch?.pricePerChicken || 0)
+    batch?.totalPurchaseCost ?? starting * Number(batch?.pricePerChicken || 0)
   );
 
   const otherExpenses = expenses.reduce(
@@ -261,26 +263,26 @@ export default function BatchDetailsScreen({ route, navigation }) {
   const showRecordMenu = (type, record) => {
     const label =
       type === "sale"
-        ? "Sale"
+        ? t("saleLabel")
         : type === "death"
-        ? "Death record"
-        : "Expense";
+        ? t("deathRecordLabel")
+        : t("expense");
 
     Alert.alert(
-      `${label} options`,
-      "Choose an action",
+      t("recordOptions").replace("{label}", label),
+      t("chooseAction"),
       [
         {
-          text: "Edit",
+          text: t("edit"),
           onPress: () => openEdit(type, record)
         },
         {
-          text: "Delete",
+          text: t("delete"),
           style: "destructive",
           onPress: () => confirmDeleteRecord(type, record)
         },
         {
-          text: "Cancel",
+          text: t("cancel"),
           style: "cancel"
         }
       ]
@@ -289,49 +291,29 @@ export default function BatchDetailsScreen({ route, navigation }) {
 
   const confirmDeleteRecord = (type, record) => {
     const collectionName =
-      type === "sale"
-        ? "sales"
-        : type === "death"
-        ? "deaths"
-        : "expenses";
+      type === "sale" ? "sales" : type === "death" ? "deaths" : "expenses";
 
-    Alert.alert(
-      "Delete record?",
-      "This action cannot be undone. Are you sure you want to delete this record?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteDoc(
-                doc(db, collectionName, record.id)
-              );
+    Alert.alert(t("deleteRecordQ"), t("deleteRecordMsg"), [
+      {
+        text: t("cancel"),
+        style: "cancel"
+      },
+      {
+        text: t("delete"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, collectionName, record.id));
 
-              Alert.alert(
-                "Record deleted",
-                "The record has been removed and the totals will update."
-              );
-            } catch (error) {
-              console.log(
-                "Record delete error:",
-                error.code,
-                error.message
-              );
+            Alert.alert(t("recordDeleted"), t("recordDeletedMsg"));
+          } catch (error) {
+            console.log("Record delete error:", error.code, error.message);
 
-              Alert.alert(
-                "Could not delete record",
-                "Check your Firestore rules. Only the admin can delete records."
-              );
-            }
+            Alert.alert(t("couldNotDeleteRecord"), t("deleteRecordRules"));
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
   const saveRecordEdit = async () => {
@@ -341,18 +323,11 @@ export default function BatchDetailsScreen({ route, navigation }) {
     const quantity = Number(editQuantity);
 
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      return Alert.alert(
-        "Invalid quantity",
-        "Enter a whole number greater than zero."
-      );
+      return Alert.alert(t("invalidQuantity"), t("wholeNumberMsg"));
     }
 
     const collectionName =
-      type === "sale"
-        ? "sales"
-        : type === "death"
-        ? "deaths"
-        : "expenses";
+      type === "sale" ? "sales" : type === "death" ? "deaths" : "expenses";
 
     let changes = { quantity };
 
@@ -363,17 +338,11 @@ export default function BatchDetailsScreen({ route, navigation }) {
       const unitCost = Number(editUnitCost);
 
       if (!Number.isFinite(unitCost) || unitCost <= 0) {
-        return Alert.alert(
-          "Invalid unit cost",
-          "Enter a unit cost greater than zero."
-        );
+        return Alert.alert(t("invalidUnitCost"), t("unitCostMsg"));
       }
 
-      if (!["Feed", "Medicine", "Other"].includes(editCategory)) {
-        return Alert.alert(
-          "Invalid category",
-          "Choose Feed, Medicine or Other."
-        );
+      if (!CATEGORIES.includes(editCategory)) {
+        return Alert.alert(t("invalidCategory"), t("categoryMsg"));
       }
 
       changes.category = editCategory;
@@ -384,56 +353,35 @@ export default function BatchDetailsScreen({ route, navigation }) {
     setUpdating(true);
 
     try {
-      await updateDoc(
-        doc(db, collectionName, record.id),
-        changes
-      );
+      await updateDoc(doc(db, collectionName, record.id), changes);
 
       setEditingRecord(null);
 
-      Alert.alert(
-        "Record updated",
-        "The record and batch totals have been updated."
-      );
+      Alert.alert(t("recordUpdated"), t("recordUpdatedMsg"));
     } catch (error) {
-      console.log(
-        "Record update error:",
-        error.code,
-        error.message
-      );
+      console.log("Record update error:", error.code, error.message);
 
-      Alert.alert(
-        "Could not update record",
-        "Check that your Firestore rules allow admins to update this collection."
-      );
+      Alert.alert(t("couldNotUpdateRecord"), t("updateRecordRules"));
     } finally {
       setUpdating(false);
     }
   };
 
-  const renderRecordCard = (
-    type,
-    record,
-    title,
-    detail,
-    amount
-  ) => (
+  const renderRecordCard = (type, record, title, detail, amount) => (
     <View key={record.id} style={styles.recordCard}>
       <View style={styles.recordTop}>
         <View style={styles.recordInfo}>
           <Text style={styles.recordTitle}>{title}</Text>
           <Text style={styles.recordDetail}>{detail}</Text>
 
-          {amount ? (
-            <Text style={styles.recordAmount}>{amount}</Text>
-          ) : null}
+          {amount ? <Text style={styles.recordAmount}>{amount}</Text> : null}
         </View>
 
         {isAdmin && (
           <TouchableOpacity
             style={styles.menuButton}
             onPress={() => showRecordMenu(type, record)}
-            accessibilityLabel={`Options for ${title}`}
+            accessibilityLabel={`${t("optionsFor")} ${title}`}
           >
             <Text style={styles.menuDots}>⋮</Text>
           </TouchableOpacity>
@@ -446,9 +394,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={GREEN} />
-        <Text style={styles.loadingText}>
-          Loading batch information...
-        </Text>
+        <Text style={styles.loadingText}>{t("loadingBatch")}</Text>
       </View>
     );
   }
@@ -456,10 +402,8 @@ export default function BatchDetailsScreen({ route, navigation }) {
   if (!batch) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.emptyTitle}>Batch not found</Text>
-        <Text style={styles.emptyText}>
-          This batch may have been deleted or is unavailable.
-        </Text>
+        <Text style={styles.emptyTitle}>{t("batchNotFound")}</Text>
+        <Text style={styles.emptyText}>{t("batchNotFoundMsg")}</Text>
       </View>
     );
   }
@@ -467,10 +411,8 @@ export default function BatchDetailsScreen({ route, navigation }) {
   if (!isAdmin && !isStaff) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.emptyTitle}>Access unavailable</Text>
-        <Text style={styles.emptyText}>
-          Your account role could not be verified. Please log in again.
-        </Text>
+        <Text style={styles.emptyTitle}>{t("accessUnavailable")}</Text>
+        <Text style={styles.emptyText}>{t("accessUnavailableMsg")}</Text>
       </View>
     );
   }
@@ -479,49 +421,42 @@ export default function BatchDetailsScreen({ route, navigation }) {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
     >
+      {/* HEADER */}
       <View style={styles.header}>
-        <Text style={styles.brand}>
-          Mtombeni Chicken Business 🐔
-        </Text>
+        <Text style={styles.logo}>🐔</Text>
 
-        <Text style={styles.heading}>
-          {batch.batchName || batchName}
-        </Text>
+        <Text style={styles.heading}>{batch.batchName || batchName}</Text>
 
-        <Text style={styles.subtitle}>
-          Batch stock and financial performance
-        </Text>
+        <Text style={styles.subtitle}>{t("batchSubtitle")}</Text>
 
         <View style={styles.statusBadge}>
-          <Text style={styles.statusText}>
-            {batch.status || "active"}
-          </Text>
+          <Text style={styles.statusText}>{statusLabel(batch.status)}</Text>
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Stock Overview</Text>
+      {/* STOCK */}
+      <Text style={styles.sectionTitle}>{t("stockOverview")}</Text>
 
       <View style={styles.grid}>
         <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Starting chickens</Text>
+          <Text style={styles.statLabel}>{t("startingChickens")}</Text>
           <Text style={styles.statValue}>{starting}</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Chickens sold</Text>
+          <Text style={styles.statLabel}>{t("chickensSold")}</Text>
           <Text style={styles.statValue}>{totalSold}</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Chickens died</Text>
-          <Text style={[styles.statValue, styles.redText]}>
-            {totalDeaths}
-          </Text>
+          <Text style={styles.statLabel}>{t("chickensDied")}</Text>
+          <Text style={[styles.statValue, styles.redText]}>{totalDeaths}</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Remaining stock</Text>
+          <Text style={styles.statLabel}>{t("remainingStock")}</Text>
           <Text
             style={[
               styles.statValue,
@@ -535,153 +470,131 @@ export default function BatchDetailsScreen({ route, navigation }) {
 
       {remaining < 0 && (
         <View style={styles.warningCard}>
-          <Text style={styles.warningText}>
-            Warning: recorded sales and deaths exceed this batch's
-            starting stock. Please check the records.
-          </Text>
+          <Text style={styles.warningText}>{t("warningStock")}</Text>
         </View>
       )}
 
-      <Text style={styles.sectionTitle}>Financial Overview</Text>
+      {/* FINANCE */}
+      <Text style={styles.sectionTitle}>{t("financialOverview")}</Text>
 
       <View style={styles.financeCard}>
         <View style={styles.financeMetric}>
-          <Text style={styles.financeLabel}>Sales Revenue</Text>
+          <Text style={styles.financeLabel}>{t("salesRevenue")}</Text>
           <Text style={styles.revenueValue}>{money(revenue)}</Text>
         </View>
 
         <View style={styles.financeDivider} />
 
         <View style={styles.financeMetric}>
-          <Text style={styles.financeLabel}>Total Expenses</Text>
-          <Text style={styles.financeValue}>
-            {money(totalExpenses)}
-          </Text>
-          <Text style={styles.expenseBreakdown}>
-            Includes chicken purchase cost and all recorded batch expenses
-          </Text>
+          <Text style={styles.financeLabel}>{t("totalExpenses")}</Text>
+          <Text style={styles.financeValue}>{money(totalExpenses)}</Text>
+          <Text style={styles.expenseBreakdown}>{t("expenseBreakdown")}</Text>
         </View>
 
         <View style={styles.financeDivider} />
 
         <View style={styles.financeProfit}>
-          <Text style={styles.financeLabel}>Profit Made</Text>
-          <Text
-            style={[
-              styles.profitValue,
-              profit < 0 && styles.redText
-            ]}
-          >
+          <Text style={styles.financeLabel}>{t("profitMade")}</Text>
+          <Text style={[styles.profitValue, profit < 0 && styles.redText]}>
             {money(profit)}
           </Text>
         </View>
       </View>
 
+      {/* SALES */}
       <Text style={styles.sectionTitle}>
-        Sales Records ({sales.length})
+        {t("salesRecords")} ({sales.length})
       </Text>
 
       {sales.length === 0 ? (
-        <Text style={styles.noRecords}>
-          No sales recorded for this batch.
-        </Text>
+        <Text style={styles.noRecords}>{t("noSales")}</Text>
       ) : (
         sales.map(item =>
           renderRecordCard(
             "sale",
             item,
-            `Sale – ${item.quantity || 0} chickens`,
-            `Price per chicken: ${money(
+            `${t("saleLabel")} – ${item.quantity || 0} ${t("chickens")}`,
+            `${t("pricePerChicken")}: ${money(
               item.pricePerChicken || SELLING_PRICE
             )}`,
             money(
-              item.totalAmount ??
-              Number(item.quantity || 0) * SELLING_PRICE
+              item.totalAmount ?? Number(item.quantity || 0) * SELLING_PRICE
             )
           )
         )
       )}
 
+      {/* DEATHS */}
       <Text style={styles.sectionTitle}>
-        Death Records ({deaths.length})
+        {t("deathRecords")} ({deaths.length})
       </Text>
 
       {deaths.length === 0 ? (
-        <Text style={styles.noRecords}>
-          No deaths recorded for this batch.
-        </Text>
+        <Text style={styles.noRecords}>{t("noDeaths")}</Text>
       ) : (
         deaths.map(item =>
           renderRecordCard(
             "death",
             item,
-            `Deaths – ${item.quantity || 0} chickens`,
-            item.reason || "Recorded chicken deaths",
+            `${t("deathsTitle")} – ${item.quantity || 0} ${t("chickens")}`,
+            item.reason || t("recordedDeaths"),
             null
           )
         )
       )}
 
+      {/* EXPENSES */}
       <Text style={styles.sectionTitle}>
-        Expense Records ({expenses.length})
+        {t("expenseRecords")} ({expenses.length})
       </Text>
 
       {expenses.length === 0 ? (
-        <Text style={styles.noRecords}>
-          No expenses recorded for this batch.
-        </Text>
+        <Text style={styles.noRecords}>{t("noExpenses")}</Text>
       ) : (
         expenses.map(item =>
           renderRecordCard(
             "expense",
             item,
-            `${item.category || "Expense"} – ${item.quantity || 0}`,
-            `Unit cost: ${money(item.unitCost)}`,
+            `${categoryLabel(item.category)} – ${item.quantity || 0}`,
+            `${t("unitCost")}: ${money(item.unitCost)}`,
             money(item.totalAmount)
           )
         )
       )}
 
+      {/* STAFF ACTIONS */}
       {isStaff && (
         <>
           <Text style={styles.sectionTitle}>
-            Record Business Activity
+            {t("recordBusinessActivity")}
           </Text>
 
           <TouchableOpacity
             style={styles.button}
             onPress={() => openScreen("AddSale")}
           >
-            <Text style={styles.buttonText}>
-              + Record Chicken Sale
-            </Text>
+            <Text style={styles.buttonText}>{t("addSaleBtn")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.button}
             onPress={() => openScreen("RecordDeath")}
           >
-            <Text style={styles.buttonText}>
-              + Record Chicken Deaths
-            </Text>
+            <Text style={styles.buttonText}>{t("addDeathBtn")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.button}
             onPress={() => openScreen("AddExpense")}
           >
-            <Text style={styles.buttonText}>
-              + Record Batch Expense
-            </Text>
+            <Text style={styles.buttonText}>{t("addExpenseBtn")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => openScreen("DailyRecords")}
           >
-            <Text style={styles.secondaryButtonText}>
-              + Add Daily Record
-            </Text>
+            <Text style={styles.secondaryButtonText}>{t("addDailyBtn")}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -690,11 +603,12 @@ export default function BatchDetailsScreen({ route, navigation }) {
         style={styles.secondaryButton}
         onPress={() => navigation.navigate("Batches")}
       >
-        <Text style={styles.secondaryButtonText}>
-          Back to All Batches
-        </Text>
+        <Text style={styles.secondaryButtonText}>{t("backToBatches")}</Text>
       </TouchableOpacity>
 
+      <Text style={styles.footer}>{t("appFooter")}</Text>
+
+      {/* EDIT MODAL */}
       <Modal
         visible={!!editingRecord}
         transparent
@@ -704,37 +618,35 @@ export default function BatchDetailsScreen({ route, navigation }) {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              Edit{" "}
               {editingRecord?.type === "sale"
-                ? "Sale"
+                ? t("editSale")
                 : editingRecord?.type === "death"
-                ? "Death Record"
-                : "Expense"}
+                ? t("editDeath")
+                : t("editExpense")}
             </Text>
 
-            <Text style={styles.label}>Quantity</Text>
+            <Text style={styles.label}>{t("quantity")}</Text>
 
             <TextInput
               style={styles.input}
               value={editQuantity}
-              onChangeText={t =>
-                setEditQuantity(t.replace(/[^0-9]/g, ""))
+              onChangeText={text =>
+                setEditQuantity(text.replace(/[^0-9]/g, ""))
               }
               keyboardType="number-pad"
             />
 
             {editingRecord?.type === "expense" && (
               <>
-                <Text style={styles.label}>Category</Text>
+                <Text style={styles.label}>{t("category")}</Text>
 
                 <View style={styles.categoryRow}>
-                  {["Feed", "Medicine", "Other"].map(category => (
+                  {CATEGORIES.map(category => (
                     <TouchableOpacity
                       key={category}
                       style={[
                         styles.categoryButton,
-                        editCategory === category &&
-                          styles.categorySelected
+                        editCategory === category && styles.categorySelected
                       ]}
                       onPress={() => setEditCategory(category)}
                     >
@@ -745,13 +657,13 @@ export default function BatchDetailsScreen({ route, navigation }) {
                             styles.categoryTextSelected
                         ]}
                       >
-                        {category}
+                        {categoryLabel(category)}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                <Text style={styles.label}>Unit cost (R)</Text>
+                <Text style={styles.label}>{t("unitCostLabel")}</Text>
 
                 <TextInput
                   style={styles.input}
@@ -764,19 +676,19 @@ export default function BatchDetailsScreen({ route, navigation }) {
 
             {editingRecord?.type === "sale" && (
               <Text style={styles.modalHint}>
-                Selling price remains fixed at R85 per chicken.
+                {t("sellingPriceFixed").replace("{price}", SELLING_PRICE)}
               </Text>
             )}
 
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, updating && styles.disabledButton]}
               onPress={saveRecordEdit}
               disabled={updating}
             >
               {updating ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={WHITE} />
               ) : (
-                <Text style={styles.buttonText}>Save Changes</Text>
+                <Text style={styles.buttonText}>{t("saveChanges")}</Text>
               )}
             </TouchableOpacity>
 
@@ -784,7 +696,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
               style={styles.cancelButton}
               onPress={() => setEditingRecord(null)}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{t("cancel")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -798,10 +710,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: CREAM
   },
+
   container: {
-    padding: 18,
-    paddingBottom: 35
+    padding: 24,
+    paddingBottom: 40
   },
+
   loadingContainer: {
     flex: 1,
     backgroundColor: CREAM,
@@ -809,306 +723,416 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 25
   },
+
   loadingText: {
     color: GREEN,
     marginTop: 12,
     fontSize: 14
   },
+
+  /* HEADER */
   header: {
-    backgroundColor: GREEN,
-    padding: 22,
-    borderRadius: 16,
-    marginBottom: 24
+    backgroundColor: WHITE,
+    padding: 25,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    marginBottom: 14,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
   },
-  brand: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold"
+
+  logo: {
+    fontSize: 52,
+    marginBottom: 8
   },
+
   heading: {
-    color: "#FFFFFF",
+    color: GREEN,
     fontSize: 25,
     fontWeight: "bold",
-    marginTop: 18
+    textAlign: "center"
   },
+
   subtitle: {
-    color: "#E1EDE3",
+    color: MUTED,
     fontSize: 14,
-    marginTop: 7
+    marginTop: 7,
+    textAlign: "center"
   },
+
   statusBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: LIGHT_GREEN,
-    paddingHorizontal: 12,
+    alignSelf: "center",
+    backgroundColor: SOFT_GREEN,
+    paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
     marginTop: 14
   },
+
   statusText: {
     color: GREEN,
     fontWeight: "bold",
     fontSize: 12,
     textTransform: "capitalize"
   },
+
   sectionTitle: {
     color: GREEN,
     fontSize: 19,
     fontWeight: "bold",
-    marginTop: 15,
+    marginTop: 18,
     marginBottom: 12
   },
+
+  /* STOCK */
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between"
   },
+
   statCard: {
     width: "48%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: WHITE,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E8E2D5"
+    borderColor: BORDER,
+    elevation: 2,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5
   },
+
   statLabel: {
-    color: "#66736A",
+    color: MUTED,
     fontSize: 13
   },
+
   statValue: {
     color: GREEN,
     fontSize: 26,
     fontWeight: "bold",
     marginTop: 8
   },
+
   greenText: {
     color: GREEN
   },
+
   redText: {
     color: RED
   },
+
   warningCard: {
     backgroundColor: "#FDECEC",
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 16
   },
+
   warningText: {
     color: RED,
     fontSize: 13,
     lineHeight: 19
   },
+
+  /* FINANCE */
   financeCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 20,
     borderWidth: 1,
-    borderColor: "#E8E2D5",
+    borderColor: BORDER,
     marginBottom: 10,
-    elevation: 2
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
   },
+
   financeMetric: {
     paddingVertical: 8
   },
+
   financeProfit: {
-    backgroundColor: LIGHT_GREEN,
-    borderRadius: 12,
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 14,
     padding: 14,
     marginTop: 4
   },
+
   financeDivider: {
     height: 1,
-    backgroundColor: "#E8E2D5",
+    backgroundColor: BORDER,
     marginVertical: 12
   },
+
   expenseBreakdown: {
-    color: BROWN,
+    color: MUTED,
     fontSize: 11,
-    marginTop: 5
+    marginTop: 5,
+    lineHeight: 16
   },
+
   financeLabel: {
-    color: "#66736A",
+    color: MUTED,
     fontSize: 13
   },
+
   financeValue: {
     color: "#26372B",
     fontSize: 19,
     fontWeight: "bold",
     marginTop: 6
   },
+
   revenueValue: {
     color: GREEN,
     fontSize: 23,
     fontWeight: "bold",
     marginTop: 6
   },
+
   profitValue: {
     color: GREEN,
     fontSize: 24,
     fontWeight: "bold",
     marginTop: 6
   },
+
+  /* RECORDS */
   recordCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 9,
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#E8E2D5"
+    borderColor: BORDER,
+    elevation: 2,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5
   },
+
   recordTop: {
     flexDirection: "row",
     alignItems: "center"
   },
+
   recordInfo: {
     flex: 1
   },
+
   recordTitle: {
-    color: GREEN,
+    color: LABEL,
     fontSize: 15,
-    fontWeight: "bold"
+    fontWeight: "700"
   },
+
   recordDetail: {
-    color: "#66736A",
+    color: MUTED,
     fontSize: 12,
     marginTop: 5
   },
+
   recordAmount: {
-    color: BROWN,
+    color: GOLD,
     fontSize: 14,
     fontWeight: "bold",
     marginTop: 6
   },
+
   menuButton: {
     width: 38,
     height: 38,
     marginLeft: 8,
-    borderRadius: 20,
-    backgroundColor: LIGHT_GREEN,
+    borderRadius: 19,
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
     alignItems: "center",
     justifyContent: "center"
   },
+
   menuDots: {
     color: GREEN,
-    fontSize: 27,
+    fontSize: 25,
     fontWeight: "bold",
-    lineHeight: 29
+    lineHeight: 27
   },
+
   noRecords: {
-    color: "#66736A",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 13
-  },
-  button: {
-    backgroundColor: GREEN,
-    padding: 16,
-    borderRadius: 10,
-    alignItems: "center",
-    marginBottom: 10,
-    marginTop: 5
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "bold"
-  },
-  secondaryButton: {
+    color: MUTED,
+    backgroundColor: WHITE,
     borderWidth: 1,
-    borderColor: GREEN,
-    padding: 15,
-    borderRadius: 10,
+    borderColor: BORDER,
+    borderRadius: 14,
+    padding: 16,
+    fontSize: 13,
+    overflow: "hidden"
+  },
+
+  /* BUTTONS */
+  button: {
+    height: 54,
+    backgroundColor: GOLD,
+    borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    marginTop: 4,
+    borderBottomWidth: 3,
+    borderBottomColor: GOLD
+  },
+
+  disabledButton: {
+    opacity: 0.6
+  },
+
+  buttonText: {
+    color: WHITE,
+    fontSize: 15,
+    fontWeight: "bold",
+    letterSpacing: 0.5
+  },
+
+  secondaryButton: {
+    height: 52,
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    backgroundColor: WHITE,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 8
   },
+
   secondaryButtonText: {
     color: GREEN,
     fontSize: 15,
     fontWeight: "bold"
   },
+
   emptyTitle: {
     color: GREEN,
     fontSize: 19,
-    fontWeight: "bold"
+    fontWeight: "bold",
+    textAlign: "center"
   },
+
   emptyText: {
-    color: "#66736A",
+    color: MUTED,
     fontSize: 14,
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20
   },
+
+  footer: {
+    textAlign: "center",
+    color: "#9A9A8E",
+    fontSize: 12,
+    marginTop: 24
+  },
+
+  /* MODAL */
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     padding: 20
   },
+
   modalCard: {
-    backgroundColor: CREAM,
-    borderRadius: 16,
-    padding: 20,
-    elevation: 5
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 25,
+    borderWidth: 1,
+    borderColor: BORDER,
+    elevation: 6
   },
+
   modalTitle: {
     color: GREEN,
-    fontSize: 21,
+    fontSize: 22,
     fontWeight: "bold"
   },
+
   label: {
-    color: "#35483A",
+    color: LABEL,
     fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
+    fontWeight: "700",
+    marginBottom: 9,
     marginTop: 16
   },
+
   input: {
-    backgroundColor: "#FFFFFF",
+    height: 52,
     borderWidth: 1,
-    borderColor: "#D5DED5",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    fontSize: 15,
     color: "#26372B",
-    fontSize: 15
+    backgroundColor: INPUT_BG
   },
+
   modalHint: {
-    color: BROWN,
+    color: MUTED,
     fontSize: 12,
-    marginTop: 12
+    marginTop: 14
   },
+
   categoryRow: {
     flexDirection: "row",
     gap: 8,
     marginTop: 2
   },
+
   categoryButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#D5DED5",
-    borderRadius: 9,
-    paddingVertical: 11,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    paddingVertical: 13,
     alignItems: "center",
-    backgroundColor: "#FFFFFF"
+    backgroundColor: INPUT_BG
   },
+
   categorySelected: {
-    backgroundColor: LIGHT_GREEN,
-    borderColor: GREEN
+    backgroundColor: WHITE,
+    borderColor: GREEN,
+    borderWidth: 2
   },
+
   categoryText: {
-    color: "#47564B",
+    color: MUTED,
     fontSize: 12,
-    fontWeight: "600"
+    fontWeight: "700"
   },
+
   categoryTextSelected: {
     color: GREEN
   },
+
   cancelButton: {
     padding: 14,
     alignItems: "center",
-    marginTop: 4
+    marginTop: 6
   },
+
   cancelText: {
     color: GREEN,
     fontWeight: "bold",

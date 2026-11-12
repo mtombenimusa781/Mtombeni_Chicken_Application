@@ -1,12 +1,19 @@
-
-import React, { useEffect, useState } from "react";
-import {View,Text,ActivityIndicator,StyleSheet,Alert,useWindowDimensions} from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
+  useWindowDimensions
+} from "react-native";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { auth, db } from "../Config/firebase";
+import { useLanguage } from "../context/LanguageContext";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import StaffDashboard from "../screens/StaffDashboard";
@@ -19,19 +26,26 @@ import RecordDeathScreen from "../screens/RecordDeathScreen";
 import DailyRecordsScreen from "../screens/DailyRecordsScreen";
 import StaffManagementScreen from "../screens/StaffManagementScreen";
 import StaffActivityScreen from "../screens/StaffActivityScreen";
+import SettingsScreen from "../screens/SettingsScreen";
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
+
+/* Same palette as LoginScreen */
 const GREEN = "#245C38";
-const LIGHT_GREEN = "#F4F8F2";
-const ACTIVE_GREEN = "#E4F1E5";
+const LIGHT_GREEN = "#F4F1E8";
+const ACTIVE_GREEN = "#F4F1E8";
+const BORDER = "#E8E2D5";
 
 function AuthStack() {
+  const { t } = useLanguage();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: GREEN },
-        headerTintColor: "#FFFFFF",
+        headerStyle: { backgroundColor: LIGHT_GREEN },
+        headerTintColor: GREEN,
+        headerShadowVisible: false,
         headerTitleStyle: { fontWeight: "bold" },
         contentStyle: { backgroundColor: LIGHT_GREEN }
       }}
@@ -45,28 +59,31 @@ function AuthStack() {
       <Stack.Screen
         name="Register"
         component={RegisterScreen}
-        options={{ title: "Register Staff" }}
+        options={{ title: t("registerStaff") }}
       />
     </Stack.Navigator>
   );
 }
 
 function LogoutScreen() {
+  const { t } = useLanguage();
+
   useEffect(() => {
     signOut(auth).catch(error => {
-      Alert.alert("Logout failed", error.message);
+      Alert.alert(t("logoutFailed"), error.message);
     });
   }, []);
 
   return (
     <View style={styles.loading}>
       <ActivityIndicator size="large" color={GREEN} />
-      <Text style={styles.message}>Signing out...</Text>
+      <Text style={styles.message}>{t("signingOut")}</Text>
     </View>
   );
 }
 
 function BusinessDrawer({ role }) {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const isLargeScreen = width >= 768;
   const isStaff = role === "staff";
@@ -83,13 +100,18 @@ function BusinessDrawer({ role }) {
         overlayColor: "rgba(0,0,0,0.35)",
 
         headerStyle: {
-          backgroundColor: GREEN
+          backgroundColor: LIGHT_GREEN,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: BORDER
         },
-        headerTintColor: "#FFFFFF",
+        headerTintColor: GREEN,
         headerTitle: "Mtombeni Chickens🐔",
         headerTitleStyle: {
           fontWeight: "bold",
-          fontSize: 17
+          fontSize: 17,
+          color: GREEN
         },
 
         drawerStyle: {
@@ -123,7 +145,7 @@ function BusinessDrawer({ role }) {
         component={isAdmin ? AdminDashboard : StaffDashboard}
         options={{
           title: "Mtombeni Chickens🐔",
-          drawerLabel: "Dashboard"
+          drawerLabel: t("navDashboard")
         }}
       />
 
@@ -131,8 +153,8 @@ function BusinessDrawer({ role }) {
         name="Batches"
         component={BatchesScreen}
         options={{
-          title: "Chicken Batches",
-          drawerLabel: "Chicken Batches"
+          title: t("chickenBatches"),
+          drawerLabel: t("chickenBatches")
         }}
       />
 
@@ -140,7 +162,7 @@ function BusinessDrawer({ role }) {
         name="BatchDetails"
         component={BatchDetailsScreen}
         options={{
-          title: "Batch Details",
+          title: t("batchDetailsTitle"),
           drawerItemStyle: { display: "none" }
         }}
       />
@@ -151,8 +173,8 @@ function BusinessDrawer({ role }) {
             name="AddSale"
             component={AddSaleScreen}
             options={{
-              title: "Record Sales",
-              drawerLabel: "Record Chicken Sales"
+              title: t("recordSalesTitle"),
+              drawerLabel: t("recordSales")
             }}
           />
 
@@ -160,8 +182,8 @@ function BusinessDrawer({ role }) {
             name="RecordDeath"
             component={RecordDeathScreen}
             options={{
-              title: "Record Chicken Deaths",
-              drawerLabel: "Record Deaths"
+              title: t("recordDeaths"),
+              drawerLabel: t("recordDeathsLabel")
             }}
           />
 
@@ -169,8 +191,8 @@ function BusinessDrawer({ role }) {
             name="DailyRecords"
             component={DailyRecordsScreen}
             options={{
-              title: "Daily Batch Records",
-              drawerLabel: "Daily Records"
+              title: t("dailyRecordsTitle"),
+              drawerLabel: t("dailyRecords")
             }}
           />
 
@@ -178,8 +200,8 @@ function BusinessDrawer({ role }) {
             name="AddExpense"
             component={AddExpenseScreen}
             options={{
-              title: "Business Expenses",
-              drawerLabel: "Record Expenses"
+              title: t("expensesTitle"),
+              drawerLabel: t("recordExpensesLabel")
             }}
           />
         </>
@@ -191,7 +213,7 @@ function BusinessDrawer({ role }) {
             name="RecordDeath"
             component={RecordDeathScreen}
             options={{
-              title: "Chicken Death Records",
+              title: t("recordDeaths"),
               drawerItemStyle: { display: "none" }
             }}
           />
@@ -200,7 +222,7 @@ function BusinessDrawer({ role }) {
             name="DailyRecords"
             component={DailyRecordsScreen}
             options={{
-              title: "Daily Batch Records",
+              title: t("dailyRecordsTitle"),
               drawerItemStyle: { display: "none" }
             }}
           />
@@ -209,36 +231,46 @@ function BusinessDrawer({ role }) {
             name="AddExpense"
             component={AddExpenseScreen}
             options={{
-              title: "Business Expenses",
+              title: t("expensesTitle"),
               drawerItemStyle: { display: "none" }
             }}
           />
-                  <Drawer.Screen
-          name="StaffManagement"
-          component={StaffManagementScreen}
-          options={{
-            title: "Staff Management",
-            drawerLabel: "Staff Management"
-          }}
-        />
 
-        <Drawer.Screen
-          name="StaffActivity"
-          component={StaffActivityScreen}
-          options={{
-            title: "Staff Activity",
-            drawerItemStyle: { display: "none" }
-          }}
-        />
+          <Drawer.Screen
+            name="StaffManagement"
+            component={StaffManagementScreen}
+            options={{
+              title: t("staffManagement"),
+              drawerLabel: t("staffManagement")
+            }}
+          />
+
+          <Drawer.Screen
+            name="StaffActivity"
+            component={StaffActivityScreen}
+            options={{
+              title: t("staffActivityTitle"),
+              drawerItemStyle: { display: "none" }
+            }}
+          />
         </>
       )}
+
+      <Drawer.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: t("settings"),
+          drawerLabel: t("settings")
+        }}
+      />
 
       <Drawer.Screen
         name="Logout"
         component={LogoutScreen}
         options={{
-          title: "Log Out",
-          drawerLabel: "Log Out"
+          title: t("logOut"),
+          drawerLabel: t("logOut")
         }}
       />
     </Drawer.Navigator>
@@ -246,19 +278,24 @@ function BusinessDrawer({ role }) {
 }
 
 export default function AppNavigator() {
-const [user, setUser] = useState(null);
-const [role, setRole] = useState(null);
-const [loading, setLoading] = useState(true);
-const [showSplash, setShowSplash] = useState(true);
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
 
-useEffect(() => {
-  const timer = setTimeout(() => {
-    setShowSplash(false);
-  }, 4000);
+  const { t } = useLanguage();
 
-  return () => clearTimeout(timer);
-}, []);
+  // Keeps the latest translator available inside the auth listener
+  const tRef = useRef(t);
+  tRef.current = t;
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async currentUser => {
@@ -277,8 +314,8 @@ useEffect(() => {
 
         if (!snapshot.exists()) {
           Alert.alert(
-            "Profile not found",
-            "Your account profile is missing."
+            tRef.current("profileNotFound"),
+            tRef.current("profileMissing")
           );
           await signOut(auth);
           return;
@@ -288,8 +325,8 @@ useEffect(() => {
 
         if (userRole !== "admin" && userRole !== "staff") {
           Alert.alert(
-            "Invalid role",
-            "Your role must be admin or staff."
+            tRef.current("invalidRole"),
+            tRef.current("invalidRoleMsg")
           );
           await signOut(auth);
           return;
@@ -298,7 +335,7 @@ useEffect(() => {
         setRole(userRole);
       } catch (error) {
         console.log("Account error:", error.code, error.message);
-        Alert.alert("Account error", error.message);
+        Alert.alert(tRef.current("accountError"), error.message);
         await signOut(auth);
       } finally {
         setLoading(false);
@@ -308,38 +345,32 @@ useEffect(() => {
     return unsubscribe;
   }, []);
 
-if (showSplash) {
-  return (
-    <View style={styles.splashContainer}>
-      <Text style={styles.chicken}>🐔</Text>
+  if (showSplash) {
+    return (
+      <View style={styles.splashContainer}>
+        <Text style={styles.chicken}>🐔</Text>
 
-      <Text style={styles.splashTitle}>
-        MTOMBENI CHICKENS
-      </Text>
+        <Text style={styles.splashTitle}>MTOMBENI CHICKENS</Text>
 
-      <Text style={styles.splashSubtitle}>
-        Quality Chickens, Better Business
-      </Text>
+        <Text style={styles.splashSubtitle}>{t("splashSubtitle")}</Text>
 
-      <ActivityIndicator
-        size="large"
-        color={GREEN}
-        style={styles.splashLoader}
-      />
-    </View>
-  );
-}
+        <ActivityIndicator
+          size="large"
+          color={GREEN}
+          style={styles.splashLoader}
+        />
+      </View>
+    );
+  }
 
-if (loading) {
-  return (
-    <View style={styles.loading}>
-      <ActivityIndicator size="large" color={GREEN} />
-      <Text style={styles.message}>
-        Loading Mtombeni Chickens...
-      </Text>
-    </View>
-  );
-}
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={GREEN} />
+        <Text style={styles.message}>{t("loading")}</Text>
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer>
@@ -359,38 +390,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: LIGHT_GREEN
   },
+
   message: {
     marginTop: 12,
     color: GREEN,
     fontSize: 15
   },
+
   splashContainer: {
-  flex: 1,
-  justifyContent: "center",
-  alignItems: "center",
-  backgroundColor: "#FFFFFF"
-},
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF"
+  },
 
-chicken: {
-  fontSize: 100,
-  marginBottom: 20
-},
+  chicken: {
+    fontSize: 100,
+    marginBottom: 20
+  },
 
-splashTitle: {
-  fontSize: 25,
-  fontWeight: "bold",
-  color: GREEN,
-  letterSpacing: 1,
-  textAlign: "center"
-},
+  splashTitle: {
+    fontSize: 25,
+    fontWeight: "bold",
+    color: GREEN,
+    letterSpacing: 1,
+    textAlign: "center"
+  },
 
-splashSubtitle: {
-  fontSize: 14,
-  color: "#647568",
-  marginTop: 10
-},
+  splashSubtitle: {
+    fontSize: 14,
+    color: "#647568",
+    marginTop: 10,
+    textAlign: "center",
+    paddingHorizontal: 24
+  },
 
-splashLoader: {
-  marginTop: 35
-},
+  splashLoader: {
+    marginTop: 35
+  }
 });

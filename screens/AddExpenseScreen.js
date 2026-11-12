@@ -1,20 +1,64 @@
-
 import React, { useEffect, useState } from "react";
-import {View,Text,TextInput,TouchableOpacity,StyleSheet,Alert,ScrollView,ActivityIndicator} from "react-native";
-import {addDoc,collection,onSnapshot,query,orderBy,serverTimestamp,doc,getDoc} from "firebase/firestore";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform
+} from "react-native";
+import {
+  addDoc,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp,
+  doc,
+  getDoc
+} from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../Config/firebase";
+import { useLanguage } from "../context/LanguageContext";
 
+const CREAM = "#F4F1E8";
+const WHITE = "#FFFFFF";
 const GREEN = "#245C38";
-const LIGHT_GREEN = "#F4F8F2";
+const GOLD = "#af7c0f";
+const BORDER = "#E8E2D5";
+const INPUT_BG = "#FCFBF8";
+const INPUT_BORDER = "#DDD8CA";
+const LABEL = "#354638";
+const MUTED = "#7A817A";
+const FOOTER = "#9A9A8E";
+const PLACEHOLDER = "#888888";
+
+/* Stored in Firestore in English; only the display is translated */
 const categories = ["Feed", "Medicine", "Other"];
 
 const money = amount =>
-  "R " + Number(amount || 0).toLocaleString("en-ZA", {
+  "R " +
+  Number(amount || 0).toLocaleString("en-ZA", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
 
+const cleanDecimal = text => {
+  const cleaned = text.replace(/[^0-9.]/g, "");
+  const parts = cleaned.split(".");
+
+  return parts.length > 2
+    ? parts[0] + "." + parts.slice(1).join("")
+    : cleaned;
+};
+
 export default function AddExpenseScreen({ navigation, route }) {
+  const { t } = useLanguage();
+
   const routeBatchId = route?.params?.batchId || "";
   const routeBatchName = route?.params?.batchName || "";
 
@@ -33,10 +77,16 @@ export default function AddExpenseScreen({ navigation, route }) {
   const qty = Number(quantity);
   const cost = Number(unitCost);
   const total =
-    Number.isFinite(qty) && qty > 0 &&
-    Number.isFinite(cost) && cost > 0
+    Number.isFinite(qty) && qty > 0 && Number.isFinite(cost) && cost > 0
       ? qty * cost
       : 0;
+
+  const categoryLabel = item =>
+    item === "Feed"
+      ? t("catFeed")
+      : item === "Medicine"
+      ? t("catMedicine")
+      : t("catOther");
 
   useEffect(() => {
     let active = true;
@@ -57,8 +107,9 @@ export default function AddExpenseScreen({ navigation, route }) {
         }
       } catch (error) {
         console.log("Role loading error:", error.code, error.message);
+
         if (active) {
-          Alert.alert("Account error", "Could not verify your account role.");
+          Alert.alert(t("accountError"), t("roleVerifyError"));
         }
       } finally {
         if (active) setRoleLoading(false);
@@ -115,7 +166,7 @@ export default function AddExpenseScreen({ navigation, route }) {
       error => {
         console.log("Batch loading error:", error.code, error.message);
         setBatchesLoading(false);
-        Alert.alert("Batch error", "Could not load the available batches.");
+        Alert.alert(t("batchError"), t("couldNotLoadAvailable"));
       }
     );
 
@@ -124,148 +175,141 @@ export default function AddExpenseScreen({ navigation, route }) {
 
   const chooseBatch = batch => {
     setSelectedBatchId(batch.id);
-    setSelectedBatchName(batch.batchName || "Unnamed batch");
+    setSelectedBatchName(batch.batchName || t("unnamedBatch"));
   };
 
-  
-const saveExpense = async () => {
-  const user = auth.currentUser;
-  const parsedQuantity = Number(quantity);
-  const parsedCost = Number(unitCost);
+  const saveExpense = async () => {
+    const user = auth.currentUser;
+    const parsedQuantity = Number(quantity);
+    const parsedCost = Number(unitCost);
 
-  if (!user) {
-    Alert.alert("Not signed in", "Please log in again.");
-    return;
-  }
+    if (!user) {
+      Alert.alert(t("notSignedIn"), t("pleaseLoginAgain"));
+      return;
+    }
 
-  if (userRole !== "staff") {
-    Alert.alert(
-      "Staff access required",
-      "Only staff accounts can record business expenses."
-    );
-    return;
-  }
+    if (userRole !== "staff") {
+      Alert.alert(t("staffAccessRequired"), t("onlyStaffExpenseShort"));
+      return;
+    }
 
-  if (!selectedBatchId) {
-    Alert.alert("Select a batch", "Choose the batch this expense belongs to.");
-    return;
-  }
+    if (!selectedBatchId) {
+      Alert.alert(t("selectBatchTitle"), t("selectBatchExpenseMsg"));
+      return;
+    }
 
-  const batch = batches.find(item => item.id === selectedBatchId);
+    const batch = batches.find(item => item.id === selectedBatchId);
 
-  if (!batch) {
-    Alert.alert("Batch unavailable", "Please select an existing batch.");
-    return;
-  }
+    if (!batch) {
+      Alert.alert(t("batchUnavailable"), t("selectExistingBatch"));
+      return;
+    }
 
-  if (!description.trim()) {
-    Alert.alert("Missing description", "Enter a description for the expense.");
-    return;
-  }
+    if (!description.trim()) {
+      Alert.alert(t("missingDescription"), t("enterDescription"));
+      return;
+    }
 
-  if (
-    quantity.trim() === "" ||
-    !Number.isFinite(parsedQuantity) ||
-    parsedQuantity <= 0
-  ) {
-    Alert.alert("Invalid quantity", "Enter a quantity greater than zero.");
-    return;
-  }
+    if (
+      quantity.trim() === "" ||
+      !Number.isFinite(parsedQuantity) ||
+      parsedQuantity <= 0
+    ) {
+      Alert.alert(t("invalidQuantity"), t("qtyGreaterZero"));
+      return;
+    }
 
-  if (
-    unitCost.trim() === "" ||
-    !Number.isFinite(parsedCost) ||
-    parsedCost <= 0
-  ) {
-    Alert.alert("Invalid unit cost", "Enter a unit cost greater than zero.");
-    return;
-  }
+    if (
+      unitCost.trim() === "" ||
+      !Number.isFinite(parsedCost) ||
+      parsedCost <= 0
+    ) {
+      Alert.alert(t("invalidUnitCost"), t("unitCostMsg"));
+      return;
+    }
 
-  const expenseTotal = Number((parsedQuantity * parsedCost).toFixed(2));
-
-  try {
-    setLoading(true);
-
-    const expenseRef = await addDoc(collection(db, "expenses"), {
-      batchId: selectedBatchId,
-      batchName: batch.batchName || selectedBatchName || "",
-      category,
-      description: description.trim(),
-      quantity: parsedQuantity,
-      unitCost: Number(parsedCost.toFixed(2)),
-      totalAmount: expenseTotal,
-      createdBy: user.uid,
-      staffEmail: user.email || "",
-      createdAt: serverTimestamp()
-    });
-
-    let activitySaved = true;
+    const expenseTotal = Number((parsedQuantity * parsedCost).toFixed(2));
 
     try {
-      const profileSnapshot = await getDoc(doc(db, "users", user.uid));
+      setLoading(true);
 
-      const staffName = profileSnapshot.exists()
-        ? profileSnapshot.data().name || "Staff member"
-        : "Staff member";
-
-      await addDoc(collection(db, "staffActivities"), {
-        staffUid: user.uid,
-        staffName,
-        staffEmail: user.email || "",
-        activityType: "Business Expense Recorded",
-        description: `${category}: ${description.trim()}`,
-        quantity: parsedQuantity,
-        amount: expenseTotal,
+      const expenseRef = await addDoc(collection(db, "expenses"), {
         batchId: selectedBatchId,
         batchName: batch.batchName || selectedBatchName || "",
-        relatedRecordId: expenseRef.id,
+        category,
+        description: description.trim(),
+        quantity: parsedQuantity,
+        unitCost: Number(parsedCost.toFixed(2)),
+        totalAmount: expenseTotal,
+        createdBy: user.uid,
+        staffEmail: user.email || "",
         createdAt: serverTimestamp()
       });
-    } catch (activityError) {
-      activitySaved = false;
-      console.log(
-        "Activity tracking error:",
-        activityError.code,
-        activityError.message
+
+      let activitySaved = true;
+
+      try {
+        const profileSnapshot = await getDoc(doc(db, "users", user.uid));
+
+        const staffName = profileSnapshot.exists()
+          ? profileSnapshot.data().name || "Staff member"
+          : "Staff member";
+
+        await addDoc(collection(db, "staffActivities"), {
+          staffUid: user.uid,
+          staffName,
+          staffEmail: user.email || "",
+          activityType: "Business Expense Recorded",
+          description: `${category}: ${description.trim()}`,
+          quantity: parsedQuantity,
+          amount: expenseTotal,
+          batchId: selectedBatchId,
+          batchName: batch.batchName || selectedBatchName || "",
+          relatedRecordId: expenseRef.id,
+          createdAt: serverTimestamp()
+        });
+      } catch (activityError) {
+        activitySaved = false;
+        console.log(
+          "Activity tracking error:",
+          activityError.code,
+          activityError.message
+        );
+      }
+
+      setCategory("Feed");
+      setDescription("");
+      setQuantity("1");
+      setUnitCost("");
+
+      if (!routeBatchId) {
+        setSelectedBatchId("");
+        setSelectedBatchName("");
+      }
+
+      Alert.alert(
+        activitySaved ? t("success") : t("expenseSaved"),
+        activitySaved ? t("expenseSavedActivity") : t("expenseSavedLogFailed")
       );
+    } catch (error) {
+      console.log("Expense save error:", error.code, error.message);
+
+      Alert.alert(
+        t("couldNotSaveExpense"),
+        error.code === "permission-denied"
+          ? t("permissionDeniedExpense")
+          : error.message || t("tryAgain")
+      );
+    } finally {
+      setLoading(false);
     }
-
-    setCategory("Feed");
-    setDescription("");
-    setQuantity("1");
-    setUnitCost("");
-
-    if (!routeBatchId) {
-      setSelectedBatchId("");
-      setSelectedBatchName("");
-    }
-
-    Alert.alert(
-      activitySaved ? "Success" : "Expense saved",
-      activitySaved
-        ? "Expense saved and staff activity recorded."
-        : "Expense saved, but staff activity could not be recorded. Check your Firestore rules."
-    );
-  } catch (error) {
-    console.log("Expense save error:", error.code, error.message);
-
-    Alert.alert(
-      "Could not save expense",
-      error.code === "permission-denied"
-        ? "Firebase rules did not allow this expense. Check your Firestore rules."
-        : error.message || "Please try again."
-    );
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   if (roleLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={GREEN} />
-        <Text style={styles.helperText}>Checking account permissions...</Text>
+        <Text style={styles.helperText}>{t("checkingPermissions")}</Text>
       </View>
     );
   }
@@ -273,445 +317,511 @@ const saveExpense = async () => {
   if (userRole !== "staff") {
     return (
       <View style={styles.centered}>
-        <Text style={styles.title}>Record Business Expense</Text>
-        <Text style={styles.helperText}>
-          Only staff accounts can record business expenses. Please sign in with
-          a staff account.
-        </Text>
-        <TouchableOpacity
-          style={styles.secondary}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.secondaryText}>Go Back</Text>
-        </TouchableOpacity>
+        <View style={styles.card}>
+          <Text style={styles.noAccessIcon}>🔒</Text>
+          <Text style={styles.heading}>{t("recordExpenseHeading")}</Text>
+          <Text style={styles.helperText}>{t("onlyStaffExpense")}</Text>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.secondaryButtonText}>{t("goBack")}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
+  const saveDisabled = loading || batchesLoading || !selectedBatchId;
+
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.screen}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
     >
-      <View style={styles.header}>
-        <Text style={styles.brand}>🐔 ChickenBiz Manager</Text>
-        <Text style={styles.title}>Record Business Expense</Text>
-        <Text style={styles.headerSubtitle}>
-          Save expenses against the correct chicken batch.
-        </Text>
-      </View>
-
-      <Text style={styles.label}>Select chicken batch *</Text>
-
-      {routeBatchId ? (
-        <View style={styles.selectedBatch}>
-          <Text style={styles.selectedBatchLabel}>Selected batch</Text>
-          <Text style={styles.selectedBatchName}>
-            {selectedBatchName || routeBatchName || "Loading batch..."}
-          </Text>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */}
+        <View style={styles.headerCard}>
+          <Text style={styles.logo}>🧾</Text>
+          <Text style={styles.heading}>{t("recordExpenseHeading")}</Text>
+          <Text style={styles.subtitle}>{t("expenseSubtitle")}</Text>
         </View>
-      ) : batchesLoading ? (
-        <ActivityIndicator color={GREEN} style={styles.batchLoader} />
-      ) : batches.length === 0 ? (
-        <View style={styles.notice}>
-          <Text style={styles.helperText}>
-            No batches are available. Ask the admin to create a chicken batch
-            first.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.batchList}>
-          {batches.map(batch => (
-            <TouchableOpacity
-              key={batch.id}
-              style={[
-                styles.batchOption,
-                selectedBatchId === batch.id && styles.batchOptionSelected
-              ]}
-              onPress={() => chooseBatch(batch)}
-              disabled={loading}
-            >
-              <View style={styles.batchOptionText}>
-                <Text
-                  style={[
-                    styles.batchName,
-                    selectedBatchId === batch.id && styles.selectedText
-                  ]}
-                >
-                  {batch.batchName || "Unnamed batch"}
-                </Text>
-                <Text
-                  style={[
-                    styles.batchMeta,
-                    selectedBatchId === batch.id && styles.selectedText
-                  ]}
-                >
-                  Starting chickens: {batch.initialChickens || 0}
-                </Text>
-              </View>
 
-              <Text
-                style={[
-                  styles.radio,
-                  selectedBatchId === batch.id && styles.selectedText
-                ]}
-              >
-                {selectedBatchId === batch.id ? "✓" : "○"}
+        <View style={styles.card}>
+          {/* BATCH */}
+          <Text style={[styles.label, styles.firstLabel]}>
+            {t("selectChickenBatchLabel")}
+          </Text>
+
+          {routeBatchId ? (
+            <View style={styles.selectedBatch}>
+              <Text style={styles.selectedBatchLabel}>
+                {t("selectedBatch")}
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+              <Text style={styles.selectedBatchName}>
+                {selectedBatchName || routeBatchName || t("loadingBatchShort")}
+              </Text>
+            </View>
+          ) : batchesLoading ? (
+            <ActivityIndicator color={GREEN} style={styles.batchLoader} />
+          ) : batches.length === 0 ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>{t("noBatchesAskAdmin")}</Text>
+            </View>
+          ) : (
+            <View style={styles.batchList}>
+              {batches.map(batch => {
+                const selected = selectedBatchId === batch.id;
 
-      <Text style={styles.label}>Expense category *</Text>
+                return (
+                  <TouchableOpacity
+                    key={batch.id}
+                    style={[
+                      styles.batchOption,
+                      selected && styles.batchOptionSelected
+                    ]}
+                    onPress={() => chooseBatch(batch)}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.batchOptionText}>
+                      <Text
+                        style={[
+                          styles.batchName,
+                          selected && styles.batchNameSelected
+                        ]}
+                      >
+                        {batch.batchName || t("unnamedBatch")}
+                      </Text>
+                      <Text style={styles.batchMeta}>
+                        {t("startingChickens")}: {batch.initialChickens || 0}
+                      </Text>
+                    </View>
 
-      <View style={styles.categories}>
-        {categories.map(item => (
+                    {selected ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={26}
+                        color={GOLD}
+                      />
+                    ) : (
+                      <View style={styles.emptyCircle} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* CATEGORY */}
+          <Text style={styles.label}>{t("expenseCategoryLabel")}</Text>
+
+          <View style={styles.categories}>
+            {categories.map(item => {
+              const selected = category === item;
+
+              return (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.categoryButton,
+                    selected && styles.categorySelected
+                  ]}
+                  onPress={() => setCategory(item)}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.categoryText,
+                      selected && styles.categoryTextSelected
+                    ]}
+                  >
+                    {categoryLabel(item)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* DESCRIPTION */}
+          <Text style={styles.label}>{t("descriptionLabel")}</Text>
+          <TextInput
+            style={styles.input}
+            value={description}
+            onChangeText={setDescription}
+            placeholder={t("descriptionPlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
+            editable={!loading}
+          />
+
+          {/* QUANTITY */}
+          <Text style={styles.label}>{t("quantityPurchasedLabel")}</Text>
+          <TextInput
+            style={styles.input}
+            value={quantity}
+            onChangeText={text => setQuantity(cleanDecimal(text))}
+            keyboardType="decimal-pad"
+            placeholder={t("quantityPlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
+            editable={!loading}
+          />
+
+          {/* UNIT COST */}
+          <Text style={styles.label}>{t("costPerUnitLabel")}</Text>
+          <TextInput
+            style={styles.input}
+            value={unitCost}
+            onChangeText={text => setUnitCost(cleanDecimal(text))}
+            keyboardType="decimal-pad"
+            placeholder={t("costPlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
+            editable={!loading}
+          />
+
+          {/* TOTAL */}
+          <View style={styles.totalBox}>
+            <Text style={styles.totalLabel}>{t("totalExpenseLabel")}</Text>
+            <Text style={styles.total}>{money(total)}</Text>
+            <Text style={styles.totalHint}>
+              {quantity || "0"} × {money(cost)}
+            </Text>
+          </View>
+
+          {/* SAVE */}
           <TouchableOpacity
-            key={item}
-            style={[
-              styles.categoryButton,
-              category === item && styles.categorySelected
-            ]}
-            onPress={() => setCategory(item)}
+            style={[styles.button, saveDisabled && styles.disabledButton]}
+            onPress={saveExpense}
+            disabled={saveDisabled}
+          >
+            {loading ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.buttonText}>{t("saveExpense")}</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation.goBack()}
             disabled={loading}
           >
-            <Text
-              style={[
-                styles.categoryText,
-                category === item && styles.selectedText
-              ]}
-            >
-              {item}
-            </Text>
+            <Text style={styles.secondaryButtonText}>{t("goBack")}</Text>
           </TouchableOpacity>
-        ))}
-      </View>
+        </View>
 
-      <Text style={styles.label}>Description *</Text>
-      <TextInput
-        style={styles.input}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="e.g. 50 kg chicken feed"
-        placeholderTextColor="#89958B"
-        editable={!loading}
-      />
-
-      <Text style={styles.label}>Quantity purchased *</Text>
-      <TextInput
-        style={styles.input}
-        value={quantity}
-        onChangeText={text => {
-          const cleaned = text.replace(/[^0-9.]/g, "");
-          const parts = cleaned.split(".");
-          setQuantity(
-            parts.length > 2
-              ? parts[0] + "." + parts.slice(1).join("")
-              : cleaned
-          );
-        }}
-        keyboardType="decimal-pad"
-        placeholder="e.g. 2"
-        placeholderTextColor="#89958B"
-        editable={!loading}
-      />
-
-      <Text style={styles.label}>Cost per item/unit (R) *</Text>
-      <TextInput
-        style={styles.input}
-        value={unitCost}
-        onChangeText={text => {
-          const cleaned = text.replace(/[^0-9.]/g, "");
-          const parts = cleaned.split(".");
-          setUnitCost(
-            parts.length > 2
-              ? parts[0] + "." + parts.slice(1).join("")
-              : cleaned
-          );
-        }}
-        keyboardType="decimal-pad"
-        placeholder="e.g. 350.00"
-        placeholderTextColor="#89958B"
-        editable={!loading}
-      />
-
-      <View style={styles.totalBox}>
-        <Text style={styles.totalLabel}>Total expense</Text>
-        <Text style={styles.total}>{money(total)}</Text>
-        <Text style={styles.totalHint}>
-          {quantity || "0"} × {money(cost)}
-        </Text>
-      </View>
-
-      <TouchableOpacity
-        style={[
-          styles.button,
-          (loading || batchesLoading || !selectedBatchId) &&
-            styles.disabledButton
-        ]}
-        onPress={saveExpense}
-        disabled={loading || batchesLoading || !selectedBatchId}
-      >
-        {loading ? (
-          <ActivityIndicator color="#FFFFFF" />
-        ) : (
-          <Text style={styles.buttonText}>Save Expense</Text>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.secondary}
-        onPress={() => navigation.goBack()}
-        disabled={loading}
-      >
-        <Text style={styles.secondaryText}>Go Back</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <Text style={styles.footer}>{t("appFooter")}</Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
-const FARM_BG = "#FFF8E7";      // Eggshell
-const CHICK_YELLOW = "#FFD54F"; // Chick yellow
-const EGG_GOLD = "#F4B400";     // Egg yolk
-const ROOSTER_RED = "#C44536";  // Rooster comb
-const FEED_BROWN = "#8B5E3C";   // Feed/wheat
-const SOFT_BEIGE = "#FDF3D7";   // Light cream
-const BORDER = "#E6C98A";       // Golden border
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: FARM_BG,
+    backgroundColor: CREAM
   },
 
   container: {
-    padding: 20,
-    paddingBottom: 35,
+    padding: 24,
+    paddingBottom: 40
   },
 
   centered: {
     flex: 1,
-    backgroundColor: FARM_BG,
+    backgroundColor: CREAM,
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    padding: 24
   },
 
-  header: {
-    backgroundColor: EGG_GOLD,
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 24,
+  /* HEADER */
+  headerCard: {
+    backgroundColor: WHITE,
+    padding: 25,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    marginBottom: 20,
     elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
   },
 
-  brand: {
-    color: "#FFFFFF",
-    fontSize: 18,
+  logo: {
+    fontSize: 52,
+    marginBottom: 8
+  },
+
+  heading: {
+    color: GREEN,
+    fontSize: 23,
     fontWeight: "bold",
+    textAlign: "center"
   },
 
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: FEED_BROWN,
-    marginBottom: 18,
+  subtitle: {
+    color: MUTED,
+    fontSize: 14,
+    marginTop: 7,
+    textAlign: "center"
   },
 
-  headerSubtitle: {
-    color: "#FFF8E7",
-    fontSize: 13,
-    marginTop: 8,
+  /* MAIN CARD */
+  card: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 25,
+    borderWidth: 1,
+    borderColor: BORDER,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
+  },
+
+  noAccessIcon: {
+    fontSize: 44,
+    textAlign: "center",
+    marginBottom: 10
+  },
+
+  helperText: {
+    color: MUTED,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    marginTop: 10
   },
 
   label: {
+    color: LABEL,
     fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 8,
-    color: FEED_BROWN,
+    fontWeight: "700",
+    marginBottom: 9,
+    marginTop: 18
+  },
+
+  firstLabel: {
+    marginTop: 0
   },
 
   input: {
-    backgroundColor: "#FFFFFF",
+    height: 52,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: INPUT_BORDER,
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 18,
-    color: "#333333",
+    paddingHorizontal: 15,
+    fontSize: 15,
+    color: "#26372B",
+    backgroundColor: INPUT_BG
   },
 
-  categories: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 18,
+  /* BATCH SELECTION */
+  batchLoader: {
+    marginVertical: 14
   },
 
-  categoryButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 10,
+  notice: {
+    backgroundColor: INPUT_BG,
     borderWidth: 1,
-    borderColor: EGG_GOLD,
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    padding: 16
   },
 
-  categorySelected: {
-    backgroundColor: EGG_GOLD,
-  },
-
-  categoryText: {
-    color: FEED_BROWN,
-    fontWeight: "700",
-  },
-
-  selectedText: {
-    color: "#FFFFFF",
+  noticeText: {
+    color: MUTED,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center"
   },
 
   selectedBatch: {
-    backgroundColor: SOFT_BEIGE,
+    backgroundColor: INPUT_BG,
+    borderWidth: 2,
+    borderColor: GREEN,
     borderRadius: 12,
-    padding: 15,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
+    padding: 15
   },
 
   selectedBatchLabel: {
-    color: "#7A6A58",
-    fontSize: 12,
+    color: MUTED,
+    fontSize: 12
   },
 
   selectedBatchName: {
-    color: FEED_BROWN,
+    color: GREEN,
     fontSize: 17,
     fontWeight: "bold",
-    marginTop: 5,
+    marginTop: 4
   },
 
   batchList: {
-    marginBottom: 18,
+    gap: 10
   },
 
   batchOption: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 8,
+    borderColor: INPUT_BORDER,
+    backgroundColor: INPUT_BG
   },
 
   batchOptionSelected: {
-    backgroundColor: CHICK_YELLOW,
-    borderColor: EGG_GOLD,
+    borderColor: GREEN,
+    borderWidth: 2,
+    backgroundColor: WHITE
   },
 
   batchOptionText: {
-    flex: 1,
+    flex: 1
   },
 
   batchName: {
-    color: FEED_BROWN,
+    color: LABEL,
     fontSize: 15,
-    fontWeight: "bold",
+    fontWeight: "700"
+  },
+
+  batchNameSelected: {
+    color: GREEN
   },
 
   batchMeta: {
-    color: "#7A6A58",
+    color: MUTED,
     fontSize: 12,
-    marginTop: 5,
+    marginTop: 4
   },
 
-  radio: {
-    color: ROOSTER_RED,
-    fontSize: 22,
-    marginLeft: 10,
-  },
-
-  batchLoader: {
-    marginVertical: 18,
-  },
-
-  notice: {
-    backgroundColor: "#FFFFFF",
-    padding: 15,
+  emptyCircle: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
+    borderWidth: 2,
+    borderColor: INPUT_BORDER
   },
 
+  /* CATEGORY */
+  categories: {
+    flexDirection: "row",
+    gap: 10
+  },
+
+  categoryButton: {
+    flex: 1,
+    height: 48,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: INPUT_BG
+  },
+
+  categorySelected: {
+    borderColor: GREEN,
+    borderWidth: 2,
+    backgroundColor: WHITE
+  },
+
+  categoryText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700"
+  },
+
+  categoryTextSelected: {
+    color: GREEN
+  },
+
+  /* TOTAL */
   totalBox: {
-    backgroundColor: CHICK_YELLOW,
-    padding: 18,
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
     borderRadius: 14,
-    marginBottom: 20,
+    padding: 18,
+    marginTop: 24,
+    alignItems: "center"
   },
 
   totalLabel: {
-    color: FEED_BROWN,
-    fontWeight: "600",
+    color: LABEL,
+    fontSize: 14,
+    fontWeight: "700"
   },
 
   total: {
-    fontSize: 26,
+    color: GREEN,
+    fontSize: 30,
     fontWeight: "bold",
-    color: FEED_BROWN,
-    marginTop: 5,
+    marginTop: 8
   },
 
   totalHint: {
-    color: "#7A6A58",
+    color: MUTED,
     fontSize: 12,
-    marginTop: 6,
+    marginTop: 6
   },
 
+  /* BUTTONS */
   button: {
-    backgroundColor: ROOSTER_RED,
-    padding: 16,
+    height: 54,
+    backgroundColor: GOLD,
     borderRadius: 12,
     alignItems: "center",
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    justifyContent: "center",
+    marginTop: 22,
+    borderBottomWidth: 3,
+    borderBottomColor: GOLD
   },
 
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.6
   },
 
   buttonText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
+    color: WHITE,
     fontSize: 16,
+    fontWeight: "bold",
+    letterSpacing: 0.5
   },
 
-  secondary: {
-    padding: 15,
+  secondaryButton: {
+    height: 52,
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    backgroundColor: WHITE,
+    borderRadius: 12,
     alignItems: "center",
-    marginTop: 8,
+    justifyContent: "center",
+    marginTop: 12
   },
 
-  secondaryText: {
-    color: FEED_BROWN,
-    fontWeight: "600",
+  secondaryButtonText: {
+    color: GREEN,
+    fontSize: 15,
+    fontWeight: "bold"
   },
 
-  helperText: {
-    color: "#7A6A58",
-    fontSize: 14,
+  footer: {
     textAlign: "center",
-    lineHeight: 21,
-    marginTop: 8,
-  },
+    color: FOOTER,
+    fontSize: 12,
+    marginTop: 26
+  }
 });

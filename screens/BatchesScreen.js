@@ -1,26 +1,53 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, ActivityIndicator, Modal
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Modal
 } from "react-native";
 import {
-  addDoc, collection, onSnapshot, query, orderBy, serverTimestamp,
-  doc, getDoc, updateDoc, deleteDoc
+  addDoc,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc
 } from "firebase/firestore";
 import { auth, db } from "../Config/firebase";
+import { useLanguage } from "../context/LanguageContext";
 
-const GREEN = "#245C38";
 const CREAM = "#F4F1E8";
-const LIGHT_GREEN = "#E4F1E5";
-const BROWN = "#8B5E3C";
-const RED = "#B42318";
+const WHITE = "#FFFFFF";
+const GREEN = "#245C38";
+const GOLD = "#af7c0f";
+const BORDER = "#E8E2D5";
+const INPUT_BG = "#FCFBF8";
+const INPUT_BORDER = "#DDD8CA";
+const LABEL = "#354638";
+const MUTED = "#7A817A";
+const FOOTER = "#9A9A8E";
+const SOFT_GREEN = "#E4F1E5";
+const PLACEHOLDER = "#888888";
 
 const money = value =>
-  "R " + Number(value || 0).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
+  "R " +
+  Number(value || 0).toLocaleString("en-ZA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 
 export default function BatchesScreen({ navigation }) {
+  const { t } = useLanguage();
+
   const [batchName, setBatchName] = useState("");
   const [initialChickens, setInitialChickens] = useState("");
   const [pricePerChicken, setPricePerChicken] = useState("");
@@ -39,9 +66,19 @@ export default function BatchesScreen({ navigation }) {
   const chickenCount = Number(initialChickens);
   const chickenPrice = Number(pricePerChicken);
   const totalCost =
-    Number.isInteger(chickenCount) && chickenCount > 0 &&
-    Number.isFinite(chickenPrice) && chickenPrice > 0
-      ? chickenCount * chickenPrice : 0;
+    Number.isInteger(chickenCount) &&
+    chickenCount > 0 &&
+    Number.isFinite(chickenPrice) &&
+    chickenPrice > 0
+      ? chickenCount * chickenPrice
+      : 0;
+
+  const statusLabel = status =>
+    status === "closed"
+      ? t("statusClosed")
+      : status === "active" || !status
+      ? t("statusActive")
+      : status;
 
   useEffect(() => {
     let active = true;
@@ -64,7 +101,7 @@ export default function BatchesScreen({ navigation }) {
         console.log("Role loading error:", error.code, error.message);
 
         if (active) {
-          Alert.alert("Account error", "Could not verify your account role.");
+          Alert.alert(t("accountError"), t("roleVerifyError"));
         }
       } finally {
         if (active) setRoleLoading(false);
@@ -104,10 +141,7 @@ export default function BatchesScreen({ navigation }) {
         console.log("Batch loading error:", error.code, error.message);
         setLoading(false);
 
-        Alert.alert(
-          "Could not load batches",
-          "Check your internet connection and Firestore security rules."
-        );
+        Alert.alert(t("couldNotLoadBatches"), t("checkConnectionRules"));
       }
     );
 
@@ -121,32 +155,23 @@ export default function BatchesScreen({ navigation }) {
     const name = batchName.trim();
 
     if (!user) {
-      return Alert.alert("Login required", "Please log in first.");
+      return Alert.alert(t("loginRequired"), t("pleaseLoginFirst"));
     }
 
     if (userRole !== "admin") {
-      return Alert.alert(
-        "Admin access required",
-        "Only the admin can create batches."
-      );
+      return Alert.alert(t("adminAccessRequired"), t("onlyAdminCreate"));
     }
 
     if (!name) {
-      return Alert.alert("Batch name required", "Enter a name for this batch.");
+      return Alert.alert(t("batchNameRequired"), t("enterBatchName"));
     }
 
     if (!Number.isInteger(count) || count <= 0) {
-      return Alert.alert(
-        "Invalid quantity",
-        "Enter a whole number greater than zero."
-      );
+      return Alert.alert(t("invalidQuantity"), t("wholeNumberMsg"));
     }
 
     if (!Number.isFinite(price) || price <= 0) {
-      return Alert.alert(
-        "Invalid purchase price",
-        "Enter a price greater than zero."
-      );
+      return Alert.alert(t("invalidPurchasePrice"), t("priceGreaterZero"));
     }
 
     setSaving(true);
@@ -168,77 +193,69 @@ export default function BatchesScreen({ navigation }) {
       setPricePerChicken("");
 
       Alert.alert(
-        "Batch created",
-        `${name}\nStarting chickens: ${count}\nPurchase cost: ${money(count * price)}`,
+        t("batchCreated"),
+        `${name}\n${t("startingChickens")}: ${count}\n${t("purchaseCost")}: ${money(
+          count * price
+        )}`,
         [
           {
-            text: "View Batch",
+            text: t("viewBatch"),
             onPress: () =>
               navigation.navigate("BatchDetails", {
                 batchId: created.id,
                 batchName: name
               })
           },
-          { text: "Done", style: "cancel" }
+          { text: t("done"), style: "cancel" }
         ]
       );
     } catch (error) {
       console.log("Batch creation error:", error.code, error.message);
 
-      Alert.alert(
-        "Could not create batch",
-        "Check your internet connection and Firestore security rules."
-      );
+      Alert.alert(t("couldNotCreateBatch"), t("checkConnectionRules"));
     } finally {
       setSaving(false);
     }
   };
 
   const showBatchMenu = batch => {
-    Alert.alert(
-      batch.batchName || "Batch options",
-      "Choose an action",
-      [
-        {
-          text: "Edit",
-          onPress: () => {
-            setEditingBatch(batch);
-            setEditName(batch.batchName || "");
-            setEditCount(String(batch.initialChickens ?? ""));
-            setEditPrice(String(batch.pricePerChicken ?? ""));
-          }
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => confirmDeleteBatch(batch)
-        },
-        { text: "Cancel", style: "cancel" }
-      ]
-    );
+    Alert.alert(batch.batchName || t("batchOptions"), t("chooseAction"), [
+      {
+        text: t("edit"),
+        onPress: () => {
+          setEditingBatch(batch);
+          setEditName(batch.batchName || "");
+          setEditCount(String(batch.initialChickens ?? ""));
+          setEditPrice(String(batch.pricePerChicken ?? ""));
+        }
+      },
+      {
+        text: t("delete"),
+        style: "destructive",
+        onPress: () => confirmDeleteBatch(batch)
+      },
+      { text: t("cancel"), style: "cancel" }
+    ]);
   };
 
   const confirmDeleteBatch = batch => {
     Alert.alert(
-      "Delete batch?",
-      `Delete ${batch.batchName || "this batch"}? This removes only the batch document. Its sales, deaths and expenses will remain in Firestore and may no longer appear under a batch.`,
+      t("deleteBatchQ"),
+      t("deleteBatchMsg").replace("{name}", batch.batchName || t("thisBatch")),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteDoc(doc(db, "batches", batch.id));
 
-              Alert.alert("Batch deleted", "The batch has been deleted.");
+              Alert.alert(t("batchDeleted"), t("batchDeletedMsg"));
             } catch (error) {
               console.log("Batch delete error:", error.code, error.message);
 
-              Alert.alert(
-                "Could not delete batch",
-                "Check your Firestore rules. Only an admin can delete batches."
-              );
+              Alert.alert(t("couldNotDeleteBatch"), t("deleteBatchRules"));
             }
           }
         }
@@ -251,18 +268,15 @@ export default function BatchesScreen({ navigation }) {
     const price = Number(editPrice);
 
     if (!editName.trim()) {
-      return Alert.alert("Batch name required", "Enter a batch name.");
+      return Alert.alert(t("batchNameRequired"), t("enterBatchName"));
     }
 
     if (!Number.isInteger(count) || count <= 0) {
-      return Alert.alert(
-        "Invalid quantity",
-        "Enter a whole number greater than zero."
-      );
+      return Alert.alert(t("invalidQuantity"), t("wholeNumberMsg"));
     }
 
     if (!Number.isFinite(price) || price <= 0) {
-      return Alert.alert("Invalid price", "Enter a price greater than zero.");
+      return Alert.alert(t("invalidPrice"), t("priceGreaterZero"));
     }
 
     setUpdating(true);
@@ -277,17 +291,11 @@ export default function BatchesScreen({ navigation }) {
 
       setEditingBatch(null);
 
-      Alert.alert(
-        "Batch updated",
-        "The batch information has been updated."
-      );
+      Alert.alert(t("batchUpdated"), t("batchUpdatedMsg"));
     } catch (error) {
       console.log("Batch update error:", error.code, error.message);
 
-      Alert.alert(
-        "Could not update batch",
-        "Check that your Firestore rules allow admins to update batches."
-      );
+      Alert.alert(t("couldNotUpdateBatch"), t("updateBatchRules"));
     } finally {
       setUpdating(false);
     }
@@ -298,56 +306,54 @@ export default function BatchesScreen({ navigation }) {
       style={styles.screen}
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
+      {/* HEADER */}
       <View style={styles.headerCard}>
-        <Text style={styles.brand}>🐔 Mtombeni Chicken Business</Text>
-        <Text style={styles.heading}>Manage Chicken Batches</Text>
-        <Text style={styles.subtitle}>
-          Keep each new group of chickens separate.
-        </Text>
+        <Text style={styles.logo}>🐔</Text>
+        <Text style={styles.heading}>{t("manageBatches")}</Text>
+        <Text style={styles.subtitle}>{t("manageBatchesSub")}</Text>
       </View>
 
       {roleLoading ? (
         <View style={styles.emptyCard}>
           <ActivityIndicator color={GREEN} />
-          <Text style={styles.emptyText}>
-            Checking account permissions...
-          </Text>
+          <Text style={styles.emptyText}>{t("checkingPermissions")}</Text>
         </View>
       ) : userRole === "admin" ? (
         <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Create New Batch</Text>
+          <Text style={styles.sectionTitle}>{t("createNewBatch")}</Text>
 
-          <Text style={styles.label}>Batch name *</Text>
+          <Text style={styles.label}>{t("batchNameLabel")}</Text>
           <TextInput
             style={styles.input}
             value={batchName}
             onChangeText={setBatchName}
-            placeholder="e.g. Batch 001"
-            placeholderTextColor="#89958B"
+            placeholder={t("batchNamePlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
             autoCapitalize="words"
             editable={!saving}
           />
 
-          <Text style={styles.label}>Number of chickens *</Text>
+          <Text style={styles.label}>{t("numChickensLabel")}</Text>
           <TextInput
             style={styles.input}
             value={initialChickens}
-            onChangeText={t =>
-              setInitialChickens(t.replace(/[^0-9]/g, ""))
+            onChangeText={text =>
+              setInitialChickens(text.replace(/[^0-9]/g, ""))
             }
-            placeholder="e.g. 100"
-            placeholderTextColor="#89958B"
+            placeholder={t("numChickensPlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
             keyboardType="number-pad"
             editable={!saving}
           />
 
-          <Text style={styles.label}>Purchase price per chicken (R) *</Text>
+          <Text style={styles.label}>{t("pricePerChickenLabel")}</Text>
           <TextInput
             style={styles.input}
             value={pricePerChicken}
-            onChangeText={t => {
-              const cleaned = t.replace(/[^0-9.]/g, "");
+            onChangeText={text => {
+              const cleaned = text.replace(/[^0-9.]/g, "");
               const parts = cleaned.split(".");
 
               setPricePerChicken(
@@ -356,19 +362,19 @@ export default function BatchesScreen({ navigation }) {
                   : cleaned
               );
             }}
-            placeholder="e.g. 35.00"
-            placeholderTextColor="#89958B"
+            placeholder={t("pricePlaceholder")}
+            placeholderTextColor={PLACEHOLDER}
             keyboardType="decimal-pad"
             editable={!saving}
           />
 
           <View style={styles.costCard}>
-            <Text style={styles.costLabel}>Total Purchase Cost</Text>
+            <Text style={styles.costLabel}>{t("totalPurchaseCost")}</Text>
             <Text style={styles.costValue}>{money(totalCost)}</Text>
             <Text style={styles.costHint}>
               {totalCost > 0
-                ? `${chickenCount} chickens × ${money(chickenPrice)}`
-                : "Enter the quantity and price to calculate the cost."}
+                ? `${chickenCount} ${t("chickens")} × ${money(chickenPrice)}`
+                : t("costHintEmpty")}
             </Text>
           </View>
 
@@ -378,35 +384,32 @@ export default function BatchesScreen({ navigation }) {
             disabled={saving}
           >
             {saving ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={WHITE} />
             ) : (
-              <Text style={styles.buttonText}>Create Batch</Text>
+              <Text style={styles.buttonText}>{t("createBatch")}</Text>
             )}
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Batch access</Text>
-          <Text style={styles.emptyText}>
-            You can open batches and view their records. Only the admin can
-            create new batches.
-          </Text>
+          <Text style={styles.emptyTitle}>{t("batchAccess")}</Text>
+          <Text style={styles.emptyText}>{t("batchAccessMsg")}</Text>
         </View>
       )}
 
       <View style={styles.listHeader}>
-        <Text style={styles.listTitle}>Your Batches</Text>
-        <Text style={styles.batchCount}>{batches.length} recorded</Text>
+        <Text style={styles.listTitle}>{t("yourBatches")}</Text>
+        <Text style={styles.batchCount}>
+          {batches.length} {t("recorded")}
+        </Text>
       </View>
 
       {loading ? (
         <ActivityIndicator size="large" color={GREEN} style={styles.loader} />
       ) : batches.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No batches yet</Text>
-          <Text style={styles.emptyText}>
-            Create your first batch using the form above.
-          </Text>
+          <Text style={styles.emptyTitle}>{t("noBatchesYet")}</Text>
+          <Text style={styles.emptyText}>{t("createFirstBatch")}</Text>
         </View>
       ) : (
         batches.map(batch => (
@@ -427,12 +430,12 @@ export default function BatchesScreen({ navigation }) {
                 <Text
                   style={[
                     styles.status,
-                    batch.status === "active"
-                      ? styles.activeStatus
-                      : styles.closedStatus
+                    batch.status === "closed"
+                      ? styles.closedStatus
+                      : styles.activeStatus
                   ]}
                 >
-                  {batch.status || "active"}
+                  {statusLabel(batch.status)}
                 </Text>
               </TouchableOpacity>
 
@@ -440,7 +443,7 @@ export default function BatchesScreen({ navigation }) {
                 <TouchableOpacity
                   style={styles.menuButton}
                   onPress={() => showBatchMenu(batch)}
-                  accessibilityLabel={`Options for ${batch.batchName}`}
+                  accessibilityLabel={`${t("optionsFor")} ${batch.batchName}`}
                 >
                   <Text style={styles.menuDots}>⋮</Text>
                 </TouchableOpacity>
@@ -457,38 +460,33 @@ export default function BatchesScreen({ navigation }) {
               }
             >
               <View style={styles.batchRow}>
-                <Text style={styles.batchLabel}>Starting chickens</Text>
-                <Text style={styles.batchValue}>
-                  {batch.initialChickens}
-                </Text>
+                <Text style={styles.batchLabel}>{t("startingChickens")}</Text>
+                <Text style={styles.batchValue}>{batch.initialChickens}</Text>
               </View>
 
               <View style={styles.batchRow}>
-                <Text style={styles.batchLabel}>Price per chicken</Text>
+                <Text style={styles.batchLabel}>{t("pricePerChicken")}</Text>
                 <Text style={styles.batchValue}>
                   {money(batch.pricePerChicken)}
                 </Text>
               </View>
 
               <View style={styles.batchRow}>
-                <Text style={styles.batchLabel}>Purchase cost</Text>
+                <Text style={styles.batchLabel}>{t("purchaseCost")}</Text>
                 <Text style={styles.batchCost}>
                   {money(batch.totalPurchaseCost)}
                 </Text>
               </View>
 
-              <Text style={styles.viewDetails}>
-                Tap to view batch details →
-              </Text>
+              <Text style={styles.viewDetails}>{t("tapToView")}</Text>
             </TouchableOpacity>
           </View>
         ))
       )}
 
-      <Text style={styles.footer}>
-        Each batch keeps its own purchase cost and stock history.
-      </Text>
+      <Text style={styles.footer}>{t("batchFooter")}</Text>
 
+      {/* EDIT MODAL */}
       <Modal
         visible={!!editingBatch}
         transparent
@@ -497,28 +495,26 @@ export default function BatchesScreen({ navigation }) {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Batch</Text>
+            <Text style={styles.modalTitle}>{t("editBatch")}</Text>
 
-            <Text style={styles.label}>Batch name</Text>
+            <Text style={styles.label}>{t("batchNameShort")}</Text>
             <TextInput
               style={styles.input}
               value={editName}
               onChangeText={setEditName}
-              placeholder="Batch name"
-              placeholderTextColor="#89958B"
+              placeholder={t("batchNameShort")}
+              placeholderTextColor={PLACEHOLDER}
             />
 
-            <Text style={styles.label}>Starting chickens</Text>
+            <Text style={styles.label}>{t("startingChickens")}</Text>
             <TextInput
               style={styles.input}
               value={editCount}
-              onChangeText={t =>
-                setEditCount(t.replace(/[^0-9]/g, ""))
-              }
+              onChangeText={text => setEditCount(text.replace(/[^0-9]/g, ""))}
               keyboardType="number-pad"
             />
 
-            <Text style={styles.label}>Purchase price per chicken (R)</Text>
+            <Text style={styles.label}>{t("purchasePriceLabel")}</Text>
             <TextInput
               style={styles.input}
               value={editPrice}
@@ -526,19 +522,17 @@ export default function BatchesScreen({ navigation }) {
               keyboardType="decimal-pad"
             />
 
-            <Text style={styles.modalHint}>
-              The total purchase cost will be recalculated automatically.
-            </Text>
+            <Text style={styles.modalHint}>{t("recalcHint")}</Text>
 
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, updating && styles.disabledButton]}
               onPress={saveBatchEdit}
               disabled={updating}
             >
               {updating ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={WHITE} />
               ) : (
-                <Text style={styles.buttonText}>Save Changes</Text>
+                <Text style={styles.buttonText}>{t("saveChanges")}</Text>
               )}
             </TouchableOpacity>
 
@@ -546,7 +540,7 @@ export default function BatchesScreen({ navigation }) {
               style={styles.cancelButton}
               onPress={() => setEditingBatch(null)}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{t("cancel")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -560,165 +554,221 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: CREAM
   },
+
   container: {
-    padding: 18,
-    paddingBottom: 35
+    padding: 24,
+    paddingBottom: 40
   },
+
+  /* HEADER */
   headerCard: {
-    backgroundColor: GREEN,
-    padding: 22,
-    borderRadius: 16,
-    marginBottom: 20
-  },
-  brand: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "bold"
-  },
-  heading: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "bold",
-    marginTop: 20
-  },
-  subtitle: {
-    color: "#E1EDE3",
-    fontSize: 14,
-    marginTop: 7
-  },
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: WHITE,
+    padding: 25,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E8E2D5",
-    elevation: 2
+    borderColor: BORDER,
+    alignItems: "center",
+    marginBottom: 22,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
   },
-  sectionTitle: {
-    color: GREEN,
-    fontSize: 19,
-    fontWeight: "bold",
+
+  logo: {
+    fontSize: 52,
     marginBottom: 8
   },
-  label: {
-    color: "#35483A",
+
+  heading: {
+    color: GREEN,
+    fontSize: 23,
+    fontWeight: "bold",
+    textAlign: "center"
+  },
+
+  subtitle: {
+    color: MUTED,
     fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
+    marginTop: 7,
+    textAlign: "center"
+  },
+
+  /* FORM */
+  formCard: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 25,
+    borderWidth: 1,
+    borderColor: BORDER,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
+  },
+
+  sectionTitle: {
+    color: GREEN,
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 4
+  },
+
+  label: {
+    color: LABEL,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 9,
     marginTop: 16
   },
+
   input: {
-    backgroundColor: "#FFFFFF",
+    height: 52,
     borderWidth: 1,
-    borderColor: "#D5DED5",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    color: "#26372B",
-    fontSize: 15
-  },
-  costCard: {
-    backgroundColor: LIGHT_GREEN,
+    borderColor: INPUT_BORDER,
     borderRadius: 12,
+    paddingHorizontal: 15,
+    fontSize: 15,
+    color: "#26372B",
+    backgroundColor: INPUT_BG
+  },
+
+  costCard: {
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 14,
     padding: 18,
     marginTop: 24,
     alignItems: "center"
   },
+
   costLabel: {
-    color: GREEN,
+    color: LABEL,
     fontSize: 14,
-    fontWeight: "600"
+    fontWeight: "700"
   },
+
   costValue: {
     color: GREEN,
     fontSize: 29,
     fontWeight: "bold",
     marginTop: 8
   },
+
   costHint: {
-    color: "#47564B",
+    color: MUTED,
     fontSize: 12,
     marginTop: 6,
     textAlign: "center"
   },
+
   button: {
-    backgroundColor: GREEN,
-    padding: 16,
-    borderRadius: 10,
+    height: 54,
+    backgroundColor: GOLD,
+    borderRadius: 12,
     alignItems: "center",
-    marginTop: 20
+    justifyContent: "center",
+    marginTop: 22,
+    borderBottomWidth: 3,
+    borderBottomColor: GOLD
   },
+
   disabledButton: {
-    opacity: 0.65
+    opacity: 0.6
   },
+
   buttonText: {
-    color: "#FFFFFF",
+    color: WHITE,
     fontSize: 16,
-    fontWeight: "bold"
+    fontWeight: "bold",
+    letterSpacing: 0.5
   },
+
+  /* LIST */
   listHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 26,
-    marginBottom: 12
+    marginTop: 28,
+    marginBottom: 14
   },
+
   listTitle: {
     color: GREEN,
     fontSize: 20,
     fontWeight: "bold"
   },
+
   batchCount: {
-    color: BROWN,
-    fontSize: 13
+    color: GOLD,
+    fontSize: 13,
+    fontWeight: "700"
   },
+
   loader: {
     marginTop: 25
   },
+
   emptyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: WHITE,
     padding: 22,
-    borderRadius: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
     alignItems: "center"
   },
+
   emptyTitle: {
     color: GREEN,
     fontSize: 16,
     fontWeight: "bold"
   },
+
   emptyText: {
-    color: "#66736A",
+    color: MUTED,
     fontSize: 13,
     textAlign: "center",
     marginTop: 8,
     lineHeight: 19
   },
+
   batchCard: {
-    backgroundColor: "#FFFFFF",
-    padding: 17,
-    borderRadius: 14,
-    marginBottom: 12,
+    backgroundColor: WHITE,
+    padding: 18,
+    borderRadius: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E8E2D5",
-    elevation: 1
+    borderColor: BORDER,
+    elevation: 3,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6
   },
+
   batchTop: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8
   },
+
   batchTitleArea: {
     flex: 1,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center"
   },
+
   batchName: {
     color: GREEN,
     fontSize: 17,
     fontWeight: "bold",
     flex: 1
   },
+
   status: {
     fontSize: 11,
     fontWeight: "bold",
@@ -728,88 +778,112 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden"
   },
+
   activeStatus: {
-    backgroundColor: LIGHT_GREEN,
+    backgroundColor: SOFT_GREEN,
     color: GREEN
   },
+
   closedStatus: {
     backgroundColor: "#EEEEEE",
     color: "#555555"
   },
+
   menuButton: {
     width: 38,
     height: 38,
     marginLeft: 8,
-    borderRadius: 20,
-    backgroundColor: LIGHT_GREEN,
+    borderRadius: 19,
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
     alignItems: "center",
     justifyContent: "center"
   },
+
   menuDots: {
     color: GREEN,
-    fontSize: 27,
+    fontSize: 25,
     fontWeight: "bold",
-    lineHeight: 29
+    lineHeight: 27
   },
+
   batchRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 9
   },
+
   batchLabel: {
-    color: "#66736A",
-    fontSize: 13
+    color: MUTED,
+    fontSize: 13,
+    flex: 1,
+    paddingRight: 10
   },
+
   batchValue: {
     color: "#26372B",
     fontSize: 13,
     fontWeight: "600"
   },
+
   batchCost: {
-    color: GREEN,
+    color: GOLD,
     fontSize: 14,
     fontWeight: "bold"
   },
+
   viewDetails: {
     color: GREEN,
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
     marginTop: 16
   },
+
   footer: {
     textAlign: "center",
-    color: "#66736A",
+    color: FOOTER,
     fontSize: 12,
-    marginTop: 18,
+    marginTop: 20,
     lineHeight: 18
   },
+
+  /* MODAL */
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     padding: 20
   },
+
   modalCard: {
-    backgroundColor: CREAM,
-    borderRadius: 16,
-    padding: 20,
-    elevation: 5
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 25,
+    borderWidth: 1,
+    borderColor: BORDER,
+    elevation: 6
   },
+
   modalTitle: {
     color: GREEN,
-    fontSize: 21,
+    fontSize: 22,
     fontWeight: "bold"
   },
+
   modalHint: {
-    color: BROWN,
+    color: MUTED,
     fontSize: 12,
-    marginTop: 12
+    marginTop: 14,
+    lineHeight: 18
   },
+
   cancelButton: {
     padding: 14,
     alignItems: "center",
-    marginTop: 4
+    marginTop: 6
   },
+
   cancelText: {
     color: GREEN,
     fontWeight: "bold",

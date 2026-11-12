@@ -1,9 +1,22 @@
-
 import React from "react";
-import {View,Text,TouchableOpacity,StyleSheet,ScrollView} from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView
+} from "react-native";
 
+const CREAM = "#F4F1E8";
+const WHITE = "#FFFFFF";
 const GREEN = "#245C38";
-const LIGHT_GREEN = "#F4F8F2";
+const GOLD = "#af7c0f";
+const BORDER = "#E8E2D5";
+const INPUT_BG = "#FCFBF8";
+const INPUT_BORDER = "#DDD8CA";
+const LABEL = "#354638";
+const MUTED = "#7A817A";
+const FOOTER = "#9A9A8E";
 
 function MenuCard({ title, description, onPress, icon }) {
   return (
@@ -31,10 +44,17 @@ export default function AdminDashboard({ navigation }) {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
     >
+      {/* HEADER */}
       <View style={styles.headerCard}>
+        <Text style={styles.logo}>🐔</Text>
         <Text style={styles.welcome}>Admin Dashboard</Text>
+        <Text style={styles.subtitle}>
+          Manage your chicken business, batches and staff.
+        </Text>
       </View>
+
       <Text style={styles.sectionTitle}>Business Management</Text>
 
       <Text style={styles.sectionDescription}>
@@ -55,6 +75,9 @@ export default function AdminDashboard({ navigation }) {
         onPress={() => navigation.navigate("StaffManagement")}
       />
 
+      <Text style={styles.footer}>
+        Mtombeni Chicken Business | Business Management
+      </Text>
     </ScrollView>
   );
 }
@@ -62,117 +85,126 @@ export default function AdminDashboard({ navigation }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: LIGHT_GREEN
+    backgroundColor: CREAM
   },
+
   container: {
-    padding: 18,
-    paddingBottom: 35
+    padding: 24,
+    paddingBottom: 40
   },
+
+  /* HEADER (same look as the Login card) */
   headerCard: {
-    backgroundColor: GREEN,
-    padding: 10,
-    borderRadius: 60,
-    marginBottom: 25,
+    backgroundColor: WHITE,
+    padding: 25,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    marginBottom: 28,
+    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8
   },
-  brand: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "bold"
+
+  logo: {
+    fontSize: 56,
+    marginBottom: 10
   },
+
   welcome: {
-    color: "#FFFFFF",
-    fontSize: 21,
+    color: GREEN,
+    fontSize: 24,
     fontWeight: "bold",
-    textAlign: "center"
+    letterSpacing: 0.5
   },
+
   subtitle: {
-    color: "#E1EDE3",
+    color: MUTED,
     fontSize: 14,
     marginTop: 8,
-    lineHeight: 21
+    lineHeight: 21,
+    textAlign: "center"
   },
-  priceBadge: {
-    backgroundColor: "#FFFFFF",
-    alignSelf: "flex-start",
-    borderRadius: 9,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginTop: 16
-  },
-  priceText: {
-    color: GREEN,
-    fontSize: 13,
-    fontWeight: "bold"
-  },
+
   sectionTitle: {
     color: GREEN,
     fontSize: 19,
     fontWeight: "bold",
-    marginBottom: 8
+    marginBottom: 8,
+    textAlign: "center"
   },
+
   sectionDescription: {
-    color: "#66736A",
+    color: MUTED,
     fontSize: 13,
     lineHeight: 20,
-    marginBottom: 16
+    marginBottom: 18,
+    textAlign: "center"
   },
+
+  /* MENU CARDS */
   menuCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
+    backgroundColor: WHITE,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 13,
+    marginBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#D5DED5",
-    elevation: 2
+    borderColor: BORDER,
+    elevation: 3,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6
   },
+
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "#E4F1E5",
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 13
   },
+
   icon: {
     fontSize: 24
   },
+
   menuContent: {
     flex: 1,
     paddingRight: 8
   },
+
   menuTitle: {
-    color: GREEN,
+    color: LABEL,
     fontSize: 15,
-    fontWeight: "bold"
+    fontWeight: "700"
   },
+
   menuDescription: {
-    color: "#66736A",
+    color: MUTED,
     fontSize: 12,
     lineHeight: 18,
     marginTop: 5
   },
+
   arrow: {
-    color: GREEN,
+    color: GOLD,
     fontSize: 28
   },
-  noteCard: {
-    backgroundColor: "#E4F1E5",
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 10
-  },
-  noteTitle: {
-    color: GREEN,
-    fontSize: 15,
-    fontWeight: "bold"
-  },
-  noteText: {
-    color: "#47564B",
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 8
+
+  footer: {
+    textAlign: "center",
+    color: FOOTER,
+    fontSize: 12,
+    marginTop: 14
   }
 });
